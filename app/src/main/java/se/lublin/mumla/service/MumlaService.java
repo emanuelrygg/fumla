@@ -29,6 +29,8 @@ import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
+import android.os.Handler;
+import android.os.Looper;
 import android.support.v4.media.session.MediaSessionCompat.Callback;
 import android.net.Uri;
 import android.os.Binder;
@@ -403,8 +405,9 @@ public class MumlaService extends HumlaService implements
     public IBinder onBind(Intent intent) {
         return new MumlaBinder(this);
     }
+    private static boolean pttActive = false;
     private static long lastTalkDownTime = 0;
-    private static final long MIN_TALK_DURATION_MS = 300; // suppress UP if less than 300ms
+    private static final long MIN_TALK_DURATION_MS = 200;
 
     public static void ensureMediaSession(Context context) {
         if (mMediaSession == null) {
@@ -419,27 +422,46 @@ public class MumlaService extends HumlaService implements
                 @Override
                 public boolean onMediaButtonEvent(@NonNull Intent mediaButtonIntent) {
                     KeyEvent event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
-                    if (event != null && event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
-                        if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                            lastTalkDownTime = System.currentTimeMillis();
-                            if (MumlaService.instance != null) {
-                                MumlaService.instance.onTalkKeyDown();
+                    if (event == null || event.getKeyCode() != KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                        return super.onMediaButtonEvent(mediaButtonIntent);
+
+                    switch (event.getAction()) {
+                        case KeyEvent.ACTION_DOWN:
+                            if (!pttActive) {
+                                lastTalkDownTime = System.currentTimeMillis();
+                                pttActive = true;
+
+                                if (MumlaService.instance != null) {
+                                    MumlaService.instance.onTalkKeyDown();
+                                    Log.i("MediaSession", "PTT: TalkKeyDown");
+                                }
                             }
                             return true;
-                        } else if (event.getAction() == KeyEvent.ACTION_UP) {
+
+                        case KeyEvent.ACTION_UP:
+                            if (!pttActive) {
+                                // Ignore stray UP with no matching DOWN
+                                Log.d("MediaSession", "PTT: Ignoring early ACTION_UP (no DOWN)");
+                                return true;
+                            }
+
                             long heldDuration = System.currentTimeMillis() - lastTalkDownTime;
                             if (heldDuration < MIN_TALK_DURATION_MS) {
-                                Log.d("MediaSession", "PTT press too short (" + heldDuration + "ms) — ignoring UP");
-                                return true; // skip releasing PTT
+                                Log.d("MediaSession", "PTT: Ignoring early ACTION_UP (" + heldDuration + "ms)");
+                                return true;
                             }
+
+                            pttActive = false;
                             if (MumlaService.instance != null) {
                                 MumlaService.instance.onTalkKeyUp();
+                                Log.i("MediaSession", "PTT: TalkKeyUp");
                             }
                             return true;
-                        }
                     }
+
                     return super.onMediaButtonEvent(mediaButtonIntent);
                 }
+
 
             });
         } else if (!mMediaSession.isActive()) {
@@ -731,15 +753,23 @@ public class MumlaService extends HumlaService implements
     @Override
     public void onTalkKeyDown() {
         Log.i("Talk key down", "Function reached");
-        if(isConnectionEstablished()
+
+        if (isConnectionEstablished()
                 && Settings.ARRAY_INPUT_METHOD_PTT.equals(mSettings.getInputMethod())) {
-            Log.i("Talk key down sent", "Connection estblished");
+
+            Log.i("Talk key down sent", "Connection established");
+
             if (!mSettings.isPushToTalkToggle() && !isTalking()) {
-                setTalkingState(true); // Start talking
-                Log.i("Talk key down sent", "Toggling");
+                Log.i("Talk key down sent", "Toggling with delay");
+
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    setTalkingState(true); // Start talking after delay
+                    Log.i("Talk key down sent", "Talking started after delay");
+                }, 150); // 150ms delay to suppress button click noise
             }
         }
     }
+
 
     /**
      * Called when a user releases a talk key (i.e. when they do not want to talk).

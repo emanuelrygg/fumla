@@ -3,19 +3,9 @@ package se.lublin.mumla;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.media.session.MediaSession;
-import android.os.Build;
-import android.preference.PreferenceManager;
-import android.support.v4.media.session.MediaControllerCompat;
-import android.support.v4.media.session.MediaSessionCompat;
 import android.util.Log;
 import android.view.KeyEvent;
-
-import androidx.core.content.ContextCompat;
-
 import se.lublin.mumla.service.MumlaService;
-import se.lublin.mumla.service.PTTForegroundService;
 
 public class PTTReceiver extends BroadcastReceiver {
 
@@ -28,11 +18,16 @@ public class PTTReceiver extends BroadcastReceiver {
 
         Log.i("PTTReceiver", "Received action: " + action);
 
-        if ("com.sonim.intent.action.PTT_KEY_DOWN".equals(action)) {
-            MumlaService.instance.onTalkKeyDown();
-        } else if ("com.sonim.intent.action.PTT_KEY_UP".equals(action)) {
-            MumlaService.instance.onTalkKeyUp();
+        try {
+            if ("com.sonim.intent.action.PTT_KEY_DOWN".equals(action)) {
+                MumlaService.instance.onTalkKeyDown();
+            } else if ("com.sonim.intent.action.PTT_KEY_UP".equals(action)) {
+                MumlaService.instance.onTalkKeyUp();
+            }
+        } catch (NullPointerException e) {
+            Log.w("PTTReceiver", "MumlaService.instance was null — ignoring " + action);
         }
     }
+
 
 }

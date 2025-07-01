@@ -3,33 +3,16 @@ package se.lublin.mumla.service;
 
 import static android.content.ContentValues.TAG;
 
-import android.app.PendingIntent;
 import android.app.Service;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.content.ComponentName;
-import android.content.Context;
 import android.content.Intent;
-import android.media.AudioManager;
-import android.media.session.MediaSession;
-import android.media.session.PlaybackState;
 import android.os.Build;
-
 import android.os.IBinder;
-import android.support.v4.media.session.MediaSessionCompat;
-import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
-import android.view.KeyEvent;
-
-import se.lublin.humla.HumlaService;
-import se.lublin.humla.audio.inputmode.ToggleInputMode;
-import se.lublin.mumla.PTTReceiver;
 import se.lublin.mumla.R;
-
-import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
-import androidx.core.content.ContextCompat;
 
 public class PTTForegroundService extends Service {
 
@@ -39,8 +22,6 @@ public class PTTForegroundService extends Service {
     public void onCreate() {
 
         super.onCreate();
-//        initMediaSession();
-
 
     }
 
@@ -80,31 +61,7 @@ public class PTTForegroundService extends Service {
             }
         }
 
-
         return flags;
-    }
-
-    public MediaSessionCompat mediaSession;
-
-    private void initMediaSession() {
-        if (mediaSession != null) return;
-
-        mediaSession = new MediaSessionCompat(this, "PlumbleMediaSession");
-        mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS |
-                MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
-
-
-        mediaSession.setPlaybackState(new PlaybackStateCompat.Builder()
-                .setState(PlaybackStateCompat.STATE_PLAYING, 0, 1.0f)
-                .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE | PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE)
-                .build());
-        mediaSession.setActive(true);
-
-
-        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
-
-
     }
 
     private void createNotificationChannel() {
