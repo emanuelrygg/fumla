@@ -29,6 +29,8 @@ import android.content.res.Configuration;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -302,6 +304,8 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
                 supportInvalidateOptionsMenu();
             }
         };
+
+
 
         mDrawerLayout.setDrawerListener(mDrawerToggle);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);

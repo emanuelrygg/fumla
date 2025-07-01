@@ -17,11 +17,19 @@
 
 package se.lublin.mumla.service;
 
+import android.Manifest;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.media.AudioManager;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
+import android.support.v4.media.session.MediaSessionCompat.Callback;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
@@ -30,8 +38,16 @@ import android.os.IBinder;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
 import android.speech.tts.TextToSpeech;
+import android.support.v4.media.session.MediaSessionCompat;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -50,6 +66,7 @@ import se.lublin.humla.model.Message;
 import se.lublin.humla.model.TalkState;
 import se.lublin.humla.util.HumlaException;
 import se.lublin.humla.util.HumlaObserver;
+import se.lublin.mumla.PTTReceiver;
 import se.lublin.mumla.R;
 import se.lublin.mumla.Settings;
 import se.lublin.mumla.service.ipc.TalkBroadcastReceiver;
@@ -94,7 +111,7 @@ public class MumlaService extends HumlaService implements
     private TextToSpeech.OnInitListener mTTSInitListener = new TextToSpeech.OnInitListener() {
         @Override
         public void onInit(int status) {
-            if(status == TextToSpeech.ERROR)
+            if (status == TextToSpeech.ERROR)
                 logWarning(getString(R.string.tts_failed));
         }
     };
@@ -142,6 +159,7 @@ public class MumlaService extends HumlaService implements
                 mNotification.setCustomContentText(getString(R.string.connected) + tor);
                 mNotification.setActionsShown(true);
                 mNotification.show();
+
             }
         }
 
@@ -184,7 +202,7 @@ public class MumlaService extends HumlaService implements
 
             if (user.getSession() == selfSession) {
                 mSettings.setMutedAndDeafened(user.isSelfMuted(), user.isSelfDeafened()); // Update settings mute/deafen state
-                if(mNotification != null) {
+                if (mNotification != null) {
                     String contentText;
                     if (user.isSelfMuted() && user.isSelfDeafened())
                         contentText = getString(R.string.status_notify_muted_and_deafened);
@@ -210,7 +228,7 @@ public class MumlaService extends HumlaService implements
             String strippedMessage = parsedMessage.text();
 
             String ttsMessage;
-            if(mShortTtsMessagesEnabled) {
+            if (mShortTtsMessagesEnabled) {
                 for (Element anchor : parsedMessage.getElementsByTag("A")) {
                     // Get just the domain portion of links
                     String href = anchor.attr("href");
@@ -231,7 +249,7 @@ public class MumlaService extends HumlaService implements
                     message.getActorName(), ttsMessage);
 
             // Read if TTS is enabled, the message is less than threshold, is a text message, and not deafened
-            if(mSettings.isTextToSpeechEnabled() &&
+            if (mSettings.isTextToSpeechEnabled() &&
                     mTTS != null &&
                     formattedTtsMessage.length() <= TTS_THRESHOLD &&
                     getSessionUser() != null &&
@@ -264,7 +282,7 @@ public class MumlaService extends HumlaService implements
 
         @Override
         public void onPermissionDenied(String reason) {
-            if(mNotification != null && !mSuppressNotifications) {
+            if (mNotification != null && !mSuppressNotifications) {
                 mNotification.setCustomTicker(reason);
                 mNotification.show();
             }
@@ -290,10 +308,71 @@ public class MumlaService extends HumlaService implements
         }
     };
 
+    private String mLastPTTSource = "ui"; // default to UI or hot corner
+
+    public void setLastPTTSource(String source) {
+        mLastPTTSource = source;
+    }
+
+    public static MumlaService instance;
+    public static MediaSession mMediaSession;
+
     @Override
     public void onCreate() {
         super.onCreate();
+        instance = this;
+        ensureMediaSession(getApplicationContext());
         registerObserver(mObserver);
+
+
+        Log.i("Media Session", "Preparing to start mMediaSession");
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "ptt_channel")
+                .setContentTitle("PTT Mode Active")
+                .setContentText("Listening for media buttons")
+                .setSmallIcon(R.drawable.ic_talking_off)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH);
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+        NotificationManagerCompat.from(this).notify(1, builder.build());
+
+        Intent pttServiceIntent = new Intent(this, PTTForegroundService.class);
+        ContextCompat.startForegroundService(this, pttServiceIntent);
+
+        registerObserver(mObserver);
+
+        // Register for preference changes
+        mSettings = Settings.getInstance(this);
+        mPTTSoundEnabled = mSettings.isPttSoundEnabled();
+        mShortTtsMessagesEnabled = mSettings.isShortTextToSpeechMessagesEnabled();
+
+
+        // Manually set theme to style overlay views
+        // XML <application> theme does NOT do this!
+        setTheme(R.style.Theme_Mumla);
+
+        // Instantiate overlay view
+        mChannelOverlay = new MumlaOverlay(this);
+        mHotCorner = new MumlaHotCorner(this, mSettings.getHotCornerGravity(), mHotCornerListener);
+
+        // Set up TTS
+        if(mSettings.isTextToSpeechEnabled())
+            mTTS = new TextToSpeech(this, mTTSInitListener);
+
+        mTalkReceiver = new TalkBroadcastReceiver(this);
+        mMessageLog = new ArrayList<>();
+        mMessageNotification = new MumlaMessageNotification(MumlaService.this);
+
 
         // Register for preference changes
         mSettings = Settings.getInstance(this);
@@ -324,6 +403,50 @@ public class MumlaService extends HumlaService implements
     public IBinder onBind(Intent intent) {
         return new MumlaBinder(this);
     }
+    private static long lastTalkDownTime = 0;
+    private static final long MIN_TALK_DURATION_MS = 300; // suppress UP if less than 300ms
+
+    public static void ensureMediaSession(Context context) {
+        if (mMediaSession == null) {
+            mMediaSession = new MediaSession(context, "MumlaSession");
+            mMediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+            mMediaSession.setPlaybackState(new PlaybackState.Builder()
+                    .setState(PlaybackState.STATE_PLAYING, 0, 1.0f)
+                    .build());
+            mMediaSession.setActive(true);
+
+            mMediaSession.setCallback(new MediaSession.Callback() {
+                @Override
+                public boolean onMediaButtonEvent(@NonNull Intent mediaButtonIntent) {
+                    KeyEvent event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                    if (event != null && event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+                        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                            lastTalkDownTime = System.currentTimeMillis();
+                            if (MumlaService.instance != null) {
+                                MumlaService.instance.onTalkKeyDown();
+                            }
+                            return true;
+                        } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                            long heldDuration = System.currentTimeMillis() - lastTalkDownTime;
+                            if (heldDuration < MIN_TALK_DURATION_MS) {
+                                Log.d("MediaSession", "PTT press too short (" + heldDuration + "ms) — ignoring UP");
+                                return true; // skip releasing PTT
+                            }
+                            if (MumlaService.instance != null) {
+                                MumlaService.instance.onTalkKeyUp();
+                            }
+                            return true;
+                        }
+                    }
+                    return super.onMediaButtonEvent(mediaButtonIntent);
+                }
+
+            });
+        } else if (!mMediaSession.isActive()) {
+            mMediaSession.setActive(true);
+        }
+    }
+
 
     @Override
     public void onDestroy() {
@@ -607,10 +730,13 @@ public class MumlaService extends HumlaService implements
      */
     @Override
     public void onTalkKeyDown() {
+        Log.i("Talk key down", "Function reached");
         if(isConnectionEstablished()
                 && Settings.ARRAY_INPUT_METHOD_PTT.equals(mSettings.getInputMethod())) {
+            Log.i("Talk key down sent", "Connection estblished");
             if (!mSettings.isPushToTalkToggle() && !isTalking()) {
                 setTalkingState(true); // Start talking
+                Log.i("Talk key down sent", "Toggling");
             }
         }
     }
@@ -621,12 +747,15 @@ public class MumlaService extends HumlaService implements
      */
     @Override
     public void onTalkKeyUp() {
+        Log.i("Talk key up", "Function reached");
         if(isConnectionEstablished()
                 && Settings.ARRAY_INPUT_METHOD_PTT.equals(mSettings.getInputMethod())) {
+            Log.i("Talk key up sent", "Connection estblished");
             if (mSettings.isPushToTalkToggle()) {
                 setTalkingState(!isTalking()); // Toggle talk state
             } else if (isTalking()) {
                 setTalkingState(false); // Stop talking
+                Log.i("Talk key up sent", "Toggling");
             }
         }
     }

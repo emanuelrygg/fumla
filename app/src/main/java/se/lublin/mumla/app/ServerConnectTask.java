@@ -22,6 +22,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.media.MediaRecorder;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.os.AsyncTask;
 
 import java.util.ArrayList;
@@ -47,6 +49,7 @@ public class ServerConnectTask extends AsyncTask<Server, Void, Intent> {
         mContext = context;
         mDatabase = database;
         mSettings = Settings.getInstance(context);
+
     }
 
     @Override
@@ -107,11 +110,14 @@ public class ServerConnectTask extends AsyncTask<Server, Void, Intent> {
 
         connectIntent.setAction(HumlaService.ACTION_CONNECT);
         return connectIntent;
+
     }
 
     @Override
     protected void onPostExecute(Intent intent) {
         super.onPostExecute(intent);
         mContext.startService(intent);
+
+
     }
 }
