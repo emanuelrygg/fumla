@@ -17,21 +17,15 @@
 
 package se.lublin.mumla.service;
 
-import android.Manifest;
-import android.app.PendingIntent;
+import static se.lublin.mumla.service.PTTForegroundService.mMediaSession;
+
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.media.session.MediaSession;
-import android.media.session.PlaybackState;
-import android.os.Handler;
-import android.os.Looper;
-import android.support.v4.media.session.MediaSessionCompat.Callback;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
@@ -40,15 +34,10 @@ import android.os.IBinder;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
 import android.speech.tts.TextToSpeech;
-import android.support.v4.media.session.MediaSessionCompat;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.widget.Toast;
-
 import androidx.annotation.NonNull;
-import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 
 import org.jsoup.Jsoup;
@@ -68,7 +57,6 @@ import se.lublin.humla.model.Message;
 import se.lublin.humla.model.TalkState;
 import se.lublin.humla.util.HumlaException;
 import se.lublin.humla.util.HumlaObserver;
-import se.lublin.mumla.PTTReceiver;
 import se.lublin.mumla.R;
 import se.lublin.mumla.Settings;
 import se.lublin.mumla.service.ipc.TalkBroadcastReceiver;
@@ -310,43 +298,21 @@ public class MumlaService extends HumlaService implements
         }
     };
 
-    private String mLastPTTSource = "ui"; // default to UI or hot corner
-
-    public void setLastPTTSource(String source) {
-        mLastPTTSource = source;
-    }
-
     public static MumlaService instance;
-    public static MediaSession mMediaSession;
+
 
     @Override
     public void onCreate() {
         super.onCreate();
         instance = this;
-        ensureMediaSession(getApplicationContext());
+        if (mMediaSession==null)
+        {
+            ensureMediaSession(getApplicationContext());
+        }
+
         registerObserver(mObserver);
 
-
         Log.i("Media Session", "Preparing to start mMediaSession");
-
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "ptt_channel")
-                .setContentTitle("PTT Mode Active")
-                .setContentText("Listening for media buttons")
-                .setSmallIcon(R.drawable.ic_talking_off)
-                .setOngoing(true)
-                .setPriority(NotificationCompat.PRIORITY_HIGH);
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
-        }
-        NotificationManagerCompat.from(this).notify(1, builder.build());
 
         Intent pttServiceIntent = new Intent(this, PTTForegroundService.class);
         ContextCompat.startForegroundService(this, pttServiceIntent);
@@ -357,7 +323,6 @@ public class MumlaService extends HumlaService implements
         mSettings = Settings.getInstance(this);
         mPTTSoundEnabled = mSettings.isPttSoundEnabled();
         mShortTtsMessagesEnabled = mSettings.isShortTextToSpeechMessagesEnabled();
-
 
         // Manually set theme to style overlay views
         // XML <application> theme does NOT do this!
@@ -374,7 +339,6 @@ public class MumlaService extends HumlaService implements
         mTalkReceiver = new TalkBroadcastReceiver(this);
         mMessageLog = new ArrayList<>();
         mMessageNotification = new MumlaMessageNotification(MumlaService.this);
-
 
         // Register for preference changes
         mSettings = Settings.getInstance(this);
@@ -412,11 +376,11 @@ public class MumlaService extends HumlaService implements
     public static void ensureMediaSession(Context context) {
         if (mMediaSession == null) {
             mMediaSession = new MediaSession(context, "MumlaSession");
-            mMediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
-            mMediaSession.setPlaybackState(new PlaybackState.Builder()
-                    .setState(PlaybackState.STATE_PLAYING, 0, 1.0f)
-                    .build());
-            mMediaSession.setActive(true);
+            mMediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS);
+      //      mMediaSession.setPlaybackState(new PlaybackState.Builder()
+       //             .setState(PlaybackState.STATE_PLAYING, 0, 1.0f)
+       //             .build());
+       //     mMediaSession.setActive(true);
 
             mMediaSession.setCallback(new MediaSession.Callback() {
                 @Override
@@ -445,11 +409,11 @@ public class MumlaService extends HumlaService implements
                                 return true;
                             }
 
-                            long heldDuration = System.currentTimeMillis() - lastTalkDownTime;
-                            if (heldDuration < MIN_TALK_DURATION_MS) {
-                                Log.d("MediaSession", "PTT: Ignoring early ACTION_UP (" + heldDuration + "ms)");
-                                return true;
-                            }
+//                            long heldDuration = System.currentTimeMillis() - lastTalkDownTime;
+//                            if (heldDuration < MIN_TALK_DURATION_MS) {
+//                                Log.d("MediaSession", "PTT: Ignoring early ACTION_UP (" + heldDuration + "ms)");
+//                                return true;
+//                            }
 
                             pttActive = false;
                             if (MumlaService.instance != null) {
@@ -465,7 +429,7 @@ public class MumlaService extends HumlaService implements
 
             });
         } else if (!mMediaSession.isActive()) {
-            mMediaSession.setActive(true);
+         //   mMediaSession.setActive(true);
         }
     }
 
@@ -756,19 +720,16 @@ public class MumlaService extends HumlaService implements
 
         if (isConnectionEstablished()
                 && Settings.ARRAY_INPUT_METHOD_PTT.equals(mSettings.getInputMethod())) {
-
             Log.i("Talk key down sent", "Connection established");
 
-            if (!mSettings.isPushToTalkToggle() && !isTalking()) {
-                Log.i("Talk key down sent", "Toggling with delay");
+            if (!mSettings.isPushToTalkToggle()) {
+                    setTalkingState(true);
 
-                new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                    setTalkingState(true); // Start talking after delay
-                    Log.i("Talk key down sent", "Talking started after delay");
-                }, 150); // 150ms delay to suppress button click noise
             }
         }
+
     }
+
 
 
     /**
@@ -788,6 +749,7 @@ public class MumlaService extends HumlaService implements
                 Log.i("Talk key up sent", "Toggling");
             }
         }
+
     }
 
     @Override

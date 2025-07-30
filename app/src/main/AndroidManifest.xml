@@ -31,6 +31,7 @@
         android:maxSdkVersion="29" />
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -61,16 +62,14 @@
         <receiver android:name=".PTTReceiver"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback" >
-            <intent-filter>
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.MEDIA_BUTTON"/>
                 <action android:name="com.sonim.intent.action.PTT_KEY_DOWN"/>
                 <action android:name="com.sonim.intent.action.PTT_KEY_UP"/>
                 <action android:name="com.sonim.intent.action.SOS_KEY_DOWN"/>
                 <action android:name="com.sonim.intent.action.SOS_KEY_UP"/>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
-
         </receiver>
-
 
         <activity
             android:name=".preference.Preferences"

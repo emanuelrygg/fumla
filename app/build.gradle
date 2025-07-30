@@ -63,7 +63,7 @@ android {
     }
 
     defaultConfig {
-        minSdkVersion 21
+        minSdkVersion 23
         targetSdk 34
         multiDexEnabled true
 
@@ -98,6 +98,7 @@ android {
     buildTypes {
         // signingConfig beta will override
         release {
+            signingConfig signingConfigs.debug
             if (android.hasProperty("signingConfigs")) {
                 if (signingConfigs.hasProperty("release")) {
                     signingConfig signingConfigs.release
