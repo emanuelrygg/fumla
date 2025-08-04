@@ -17,7 +17,7 @@
 
 package se.lublin.mumla.service;
 
-import static se.lublin.mumla.service.PTTForegroundService.mMediaSession;
+import static se.lublin.mumla.service.MediaButtonService.mMediaSession;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -314,7 +314,7 @@ public class MumlaService extends HumlaService implements
 
         Log.i("Media Session", "Preparing to start mMediaSession");
 
-        Intent pttServiceIntent = new Intent(this, PTTForegroundService.class);
+        Intent pttServiceIntent = new Intent(this, MediaButtonService.class);
         ContextCompat.startForegroundService(this, pttServiceIntent);
 
         registerObserver(mObserver);

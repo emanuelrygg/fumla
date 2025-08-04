@@ -23,8 +23,8 @@ import android.content.Intent;
 import android.media.session.MediaSession;
 import android.os.IBinder;
 import android.util.Log;
+public class MediaButtonService extends Service {
 
-public class PTTForegroundService extends Service {
 
     private static final String CHANNEL_ID = "PTTServiceChannel";
 

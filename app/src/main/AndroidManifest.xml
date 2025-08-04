@@ -59,7 +59,7 @@
         android:localeConfig="@xml/local_config">
         <!-- requestLegacyExternalStorage still true: we keep using old code if Android < 30 -->
 
-        <receiver android:name=".PTTReceiver"
+        <receiver android:name=".service.HardwareButtonReceiver"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback" >
             <intent-filter android:priority="1000">

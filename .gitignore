@@ -17,3 +17,8 @@ local.properties
 
 # Java
 *.class
+
+*.apk
+*.aab
+/app/release/
+/release/
