@@ -3,7 +3,7 @@
     <string name="delete">Slett</string>
     <string name="remove">Fjern</string>
     <string name="edit">Rediger</string>
-    <string name="connectToServer">Koble til tjener</string>
+    <string name="connectToServer">Koble til server</string>
     <string name="connect">Koble til</string>
     <string name="quickConnect">Hurtigtilkobling</string>
     <string name="bluetooth">Blåtann</string>
@@ -14,11 +14,11 @@
     <string name="generateCertSuccess">Sertifikatet ditt har blitt satt og lagret som %s!</string>
     <string name="messageReceived">Ny melding</string>
     <string name="accessAdd">Legg til tilgangssymbol</string>
-    <string name="addFavorite">Legg til favoritt</string>
+    <string name="addFavorite">Legg til privat server</string>
     <string name="externalStorageUnavailable">Eksternt lagringsmedium utilgjengelig. Kan ikke laste inn sertifikat.</string>
     <string name="reset_key">Tilbakestill nøkkel</string>
     <string name="confirm_delete_channel">Er du sikker på at du vil slette denne kanalen\?</string>
-    <string name="confirm_delete_server">Er du sikker på at du vil slette denne tjeneren\?</string>
+    <string name="confirm_delete_server">Er du sikker på at du vil slette denne serveren\?</string>
     <string name="perm_denied">Tilgang nektet.</string>
     <string name="connectionRefused">Tilkobling nektet</string>
     <string name="chat">Sludring</string>
@@ -36,19 +36,19 @@
     <string name="server_port">Port</string>
     <string name="server_username">Brukernavn</string>
     <string name="server_password">Passord</string>
-    <string name="no_servers">Trykk «Legg til» fra handlingsfeltet for å legge til en tjener først.</string>
-    <string name="server_match_description">Mumla kan automatisk finne deg en tom tjener, optimalisere for plassering, versjon, og latens.</string>
+    <string name="no_servers">Trykk «Legg til» fra handlingsfeltet for å legge til en server først.</string>
+    <string name="server_match_description">Mumla kan automatisk finne deg en tom server, optimalisere for plassering, versjon, og latens.</string>
     <string name="server_match_info">Navn: %1$s
 \nVert: %2$s:%3$d
 \nBrukere: %4$d / %5$d
 \nVersjon: %6$s
 \nLand: %7$s
 \nLatens: %8$d ms</string>
-    <string name="server_match_expand_country">Kunne ikke finne noen optimale tjenere i ditt land. Søk i hele verden\?</string>
-    <string name="server_match_not_found">Kunne ikke finne tjener</string>
-    <string name="server_match_found">Fant tjener</string>
-    <string name="server_match_progress">Finner en tjener …</string>
-    <string name="server_match">Finn tjener</string>
+    <string name="server_match_expand_country">Kunne ikke finne noen optimale servere i ditt land. Søk i hele verden\?</string>
+    <string name="server_match_not_found">Kunne ikke finne server</string>
+    <string name="server_match_found">Fant server</string>
+    <string name="server_match_progress">Finner en server …</string>
+    <string name="server_match">Finn server</string>
     <string name="server_info_current_bandwidth">Nåværende %.1f kbit/s</string>
     <string name="server_info_max_bandwidth">Maksimalt %.1f kbit/s</string>
     <string name="server_info_codec">Kodek: %s</string>
@@ -64,7 +64,7 @@
     </plurals>
     <string name="donation_thanks">Takk for din donasjon.</string>
     <string name="default_">Forvalg</string>
-    <string name="orbot_tor_failed">Kunne ikke koble til lokal Tor-mellomtjener på port %d (SOCKS).
+    <string name="orbot_tor_failed">Kunne ikke koble til lokal Tor-mellomserver på port %d (SOCKS).
 \n
 \nForsikre deg om at Orbot-programmet kjører.</string>
     <string name="orbot_not_installed">Orbot-programmet er ikke installert. Bruker ikke Tor.</string>
@@ -123,7 +123,7 @@
     <string name="send_message">Send melding</string>
     <string name="invalid_password">Feil passord.</string>
     <string name="generate">Generer</string>
-    <string name="first_run_generate_certificate">Generering av sertifikat anbefales sterkt, og er påkrevd for tilkobling til noen tjenere.</string>
+    <string name="first_run_generate_certificate">Generering av sertifikat anbefales sterkt, og er påkrevd for tilkobling til noen servere.</string>
     <string name="first_run_generate_certificate_title">Velkommen</string>
     <string name="mumble_url_parse_failed">Mumble-nettadressen er ugyldig.</string>
     <string name="tts_failed">Kunne ikke start knapp for snakking</string>
@@ -134,12 +134,12 @@
     <string name="expand">Utvid</string>
     <string name="confirm">Bekreft</string>
     <string name="confirm_reset_comment">Er du sikker på at du ønsker å tilbakestille kommentaren til brukeren %s\?</string>
-    <string name="reconnect_dialog_message">Du er allerede tilkoblet en tjener. Koble til denne tjeneren istedenfor\?</string>
+    <string name="reconnect_dialog_message">Du er allerede tilkoblet en server. Koble til denne serveren istedenfor\?</string>
     <string name="reconnect">Koble til igjen</string>
     <string name="action_settings">Innstillinger</string>
     <string name="hint_reason">Grunn</string>
     <string name="overlay">Overlag</string>
-    <string name="error_fetching_servers">Kunne ikke hente tjenere.
+    <string name="error_fetching_servers">Kunne ikke hente servere.
 \nEr du koblet til Internett\?</string>
     <string name="information">Info</string>
     <string name="search_country">Land</string>
@@ -147,7 +147,7 @@
     <string name="close">Lukk</string>
     <string name="status_notify_muted">Forstummet.</string>
     <string name="status_notify_muted_and_deafened">Forstummet og gjort døv.</string>
-    <string name="shareMessage">Ta del i denne Mumble-tjeneren med Mumla. %s</string>
+    <string name="shareMessage">Ta del i denne Mumble-serveren med Mumla. %s</string>
     <string name="description">Beskrivelse</string>
     <string name="share">Deling</string>
     <string name="country">Land</string>
@@ -191,9 +191,9 @@
     <string name="user_menu_kick">Kast ut</string>
     <string name="chat_message_tts_short_link">(Lenke til %1$s)</string>
     <string name="chat_message_to">%1$s → %2$s</string>
-    <string name="drawer_public">Offentlige tjenere</string>
-    <string name="drawer_favorites">Favoritter</string>
-    <string name="drawer_header_servers">Tjenere</string>
+    <string name="drawer_public">Offentlige servere</string>
+    <string name="drawer_favorites">Private servere</string>
+    <string name="drawer_header_servers">Servere</string>
     <string name="drawer_pinned">Festede kanaler</string>
     <string name="drawer_tokens">Tilgangssymboler</string>
     <string name="drawer_server">Alle kanaler</string>

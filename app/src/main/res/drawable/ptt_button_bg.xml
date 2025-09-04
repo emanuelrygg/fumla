@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-  
+    <!-- Pressed/held state -->
+    <item android:state_pressed="true">
+        <shape android:shape="oval">
+            <!-- use your existing theme color -->
+            <solid android:color="?attr/colorPrimaryDark"/>
+        </shape>
+    </item>
+
+    <!-- Default -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="?attr/colorPrimary"/>
+        </shape>
+    </item>
 </selector>

@@ -17,14 +17,21 @@
 
 package se.lublin.mumla.service;
 
-import static se.lublin.mumla.service.MediaButtonService.mMediaSession;
+import static se.lublin.mumla.app.MumlaActivity.toogleformediasession;
+import static se.lublin.mumla.channel.ChannelListAdapter.channel_id;
+//import static se.lublin.mumla.service.MediaButtonService.mMediaSession;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.media.AudioAttributes;
 import android.media.AudioManager;
+import android.media.AudioTrack;
 import android.media.session.MediaSession;
 import android.net.Uri;
 import android.os.Binder;
@@ -38,7 +45,10 @@ import android.util.Log;
 import android.view.KeyEvent;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
+import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentTransaction;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -50,17 +60,26 @@ import java.util.List;
 
 import se.lublin.humla.Constants;
 import se.lublin.humla.HumlaService;
+import se.lublin.humla.IHumlaService;
 import se.lublin.humla.exception.AudioException;
 import se.lublin.humla.model.IMessage;
 import se.lublin.humla.model.IUser;
 import se.lublin.humla.model.Message;
+import se.lublin.humla.model.Server;
 import se.lublin.humla.model.TalkState;
 import se.lublin.humla.util.HumlaException;
 import se.lublin.humla.util.HumlaObserver;
+import se.lublin.mumla.BootReceiver;
 import se.lublin.mumla.R;
 import se.lublin.mumla.Settings;
+import se.lublin.mumla.app.ServerConnectTask;
+import se.lublin.mumla.channel.MainFragment;
+import se.lublin.mumla.db.MumlaDatabase;
 import se.lublin.mumla.service.ipc.TalkBroadcastReceiver;
+import se.lublin.mumla.util.DatabaseStore;
 import se.lublin.mumla.util.HtmlUtils;
+import se.lublin.mumla.util.ServerStore;
+
 
 /**
  * An extension of the Humla service with some added Mumla-exclusive non-standard Mumble features.
@@ -76,6 +95,17 @@ public class MumlaService extends HumlaService implements
     public static final int PROXIMITY_SCREEN_OFF_WAKE_LOCK = 32;
     public static final int TTS_THRESHOLD = 250; // Maximum number of characters to read
     public static final int RECONNECT_DELAY = 10000;
+
+    private IHumlaService mService;
+    public static Server staticserver;
+
+    public static MumlaDatabase staticDatabase;
+
+    public static final int NOTIF_ID = 42;
+    private static final String NOTIF_CHANNEL = "voice_foreground";
+
+    private static final String NOTIF_CHANNEL_SHARED = "voice_foreground";
+    private static final int NOTIFICATION_ID = 1001;
 
     private Settings mSettings;
     private MumlaConnectionNotification mNotification;
@@ -105,6 +135,89 @@ public class MumlaService extends HumlaService implements
                 logWarning(getString(R.string.tts_failed));
         }
     };
+
+    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        Notification notification = createServiceNotification("Connecting...", "Mumla is starting");
+        startForeground(NOTIF_ID, notification);
+        Log.d("Autoconnect", "OnStartCommand");
+        if (intent != null && BootReceiver.ACTION_AUTOCONNECT.equals(intent.getAction())) {
+            ensureForegroundNotification("Reconnecting…");  // within 5s
+            Log.d("Autoconnect", "Bootloader intent received");
+            autoConnectFromPrefs();
+            return START_STICKY;
+        }
+        return super.onStartCommand(intent, flags, startId);
+    }
+
+    private void ensureForegroundNotification(String text) {
+        Notification notification2 = createServiceNotification("Connecting...", "Mumla is reconnecting to previous channel");
+        startForeground(32, notification2);
+    }
+
+    private void ensureNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    NOTIF_CHANNEL_SHARED,
+                    "Mumla Service",
+                    NotificationManager.IMPORTANCE_LOW
+            );
+            channel.setDescription("Ongoing voice connection");
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) {
+                nm.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    private Notification createServiceNotification(String title, String text) {
+        ensureNotificationChannel();
+
+        return new NotificationCompat.Builder(this, NOTIF_CHANNEL_SHARED)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setSmallIcon(R.drawable.ic_mumla) // replace with your app’s status icon
+                .setOngoing(true)
+                .setForegroundServiceBehavior(
+                        NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE
+                )
+                .build();
+    }
+
+    private void autoConnectFromPrefs() {
+        final Context c = getApplicationContext();
+
+        MumlaDatabase db = new DatabaseStore(c);
+
+        Log.d("Autoconnect", "Trying to autoconnect from prefs");
+
+//        Server ser = new ServerStore(c).getSelectedServer();
+//        if (db == null || ser == null) {
+//            stopSelf(); return;
+//        }
+        try {
+            ServerConnectTask connectTask = new ServerConnectTask(this, db);
+ //           connectTask.execute(ser);
+            Log.d("Autoconnect", "Tried to connect server");
+
+        } catch (Throwable t) {
+            Log.d("Autoconnect", "Exception during autoconnect from prefs");
+            updateNotification("Reconnect failed: " + t.getMessage());
+        }
+        SharedPreferences prefs = getApplicationContext().getSharedPreferences("mumla_channel_prefs", Context.MODE_PRIVATE);
+        int channelId = prefs.getInt("PREF_CHANNEL_ID", -1);  // -1 is default if not set
+        if (channelId!=-1)
+        {
+//            mService.HumlaSession().joinChannel(channelId);
+            Log.d("Autoconnect", "Tried to join channel");
+
+        }
+
+    }
+
+    private void updateNotification(String text) {
+        // Update the same NOTIF_ID with new content text
+    }
+
 
     /** The view representing the hot corner. */
     private MumlaHotCorner mHotCorner;
@@ -305,17 +418,11 @@ public class MumlaService extends HumlaService implements
     public void onCreate() {
         super.onCreate();
         instance = this;
-        if (mMediaSession==null)
-        {
-            ensureMediaSession(getApplicationContext());
-        }
+
 
         registerObserver(mObserver);
 
         Log.i("Media Session", "Preparing to start mMediaSession");
-
-        Intent pttServiceIntent = new Intent(this, MediaButtonService.class);
-        ContextCompat.startForegroundService(this, pttServiceIntent);
 
         registerObserver(mObserver);
 
@@ -344,6 +451,7 @@ public class MumlaService extends HumlaService implements
         mSettings = Settings.getInstance(this);
         mPTTSoundEnabled = mSettings.isPttSoundEnabled();
         mShortTtsMessagesEnabled = mSettings.isShortTextToSpeechMessagesEnabled();
+
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
         preferences.registerOnSharedPreferenceChangeListener(this);
 
@@ -369,69 +477,9 @@ public class MumlaService extends HumlaService implements
     public IBinder onBind(Intent intent) {
         return new MumlaBinder(this);
     }
-    private static boolean pttActive = false;
-    private static long lastTalkDownTime = 0;
-    private static final long MIN_TALK_DURATION_MS = 200;
-
-    public static void ensureMediaSession(Context context) {
-        if (mMediaSession == null) {
-            mMediaSession = new MediaSession(context, "MumlaSession");
-            mMediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS);
-      //      mMediaSession.setPlaybackState(new PlaybackState.Builder()
-       //             .setState(PlaybackState.STATE_PLAYING, 0, 1.0f)
-       //             .build());
-       //     mMediaSession.setActive(true);
-
-            mMediaSession.setCallback(new MediaSession.Callback() {
-                @Override
-                public boolean onMediaButtonEvent(@NonNull Intent mediaButtonIntent) {
-                    KeyEvent event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
-                    if (event == null || event.getKeyCode() != KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-                        return super.onMediaButtonEvent(mediaButtonIntent);
-
-                    switch (event.getAction()) {
-                        case KeyEvent.ACTION_DOWN:
-                            if (!pttActive) {
-                                lastTalkDownTime = System.currentTimeMillis();
-                                pttActive = true;
-
-                                if (MumlaService.instance != null) {
-                                    MumlaService.instance.onTalkKeyDown();
-                                    Log.i("MediaSession", "PTT: TalkKeyDown");
-                                }
-                            }
-                            return true;
-
-                        case KeyEvent.ACTION_UP:
-                            if (!pttActive) {
-                                // Ignore stray UP with no matching DOWN
-                                Log.d("MediaSession", "PTT: Ignoring early ACTION_UP (no DOWN)");
-                                return true;
-                            }
-
-//                            long heldDuration = System.currentTimeMillis() - lastTalkDownTime;
-//                            if (heldDuration < MIN_TALK_DURATION_MS) {
-//                                Log.d("MediaSession", "PTT: Ignoring early ACTION_UP (" + heldDuration + "ms)");
-//                                return true;
-//                            }
-
-                            pttActive = false;
-                            if (MumlaService.instance != null) {
-                                MumlaService.instance.onTalkKeyUp();
-                                Log.i("MediaSession", "PTT: TalkKeyUp");
-                            }
-                            return true;
-                    }
-
-                    return super.onMediaButtonEvent(mediaButtonIntent);
-                }
 
 
-            });
-        } else if (!mMediaSession.isActive()) {
-         //   mMediaSession.setActive(true);
-        }
-    }
+
 
 
     @Override
@@ -662,6 +710,7 @@ public class MumlaService extends HumlaService implements
         mErrorShown = true;
     }
 
+
     @Override
     public void reconnect() {
         connect();
@@ -722,12 +771,11 @@ public class MumlaService extends HumlaService implements
                 && Settings.ARRAY_INPUT_METHOD_PTT.equals(mSettings.getInputMethod())) {
             Log.i("Talk key down sent", "Connection established");
 
-            if (!mSettings.isPushToTalkToggle()) {
-                    setTalkingState(true);
-
+            setTalkingState(true);
+            if (mSettings.isPushToTalkToggle() || toogleformediasession) {
+                    setTalkingState(!isTalking());
             }
         }
-
     }
 
 
@@ -742,14 +790,11 @@ public class MumlaService extends HumlaService implements
         if(isConnectionEstablished()
                 && Settings.ARRAY_INPUT_METHOD_PTT.equals(mSettings.getInputMethod())) {
             Log.i("Talk key up sent", "Connection estblished");
-            if (mSettings.isPushToTalkToggle()) {
-                setTalkingState(!isTalking()); // Toggle talk state
-            } else if (isTalking()) {
+            if ((!toogleformediasession || !mSettings.isPushToTalkToggle()) && isTalking())  {
                 setTalkingState(false); // Stop talking
                 Log.i("Talk key up sent", "Toggling");
             }
         }
-
     }
 
     @Override

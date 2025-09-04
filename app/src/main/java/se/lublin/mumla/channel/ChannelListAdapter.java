@@ -18,6 +18,7 @@
 package se.lublin.mumla.channel;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -65,6 +66,8 @@ public class ChannelListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     // Set particular bits to make the integer-based model item ids unique.
     public static final long CHANNEL_ID_MASK = (0x1L << 32);
     public static final long USER_ID_MASK = (0x1L << 33);
+
+    public static int channel_id;
 
     private Context mContext;
     private IHumlaService mService;
@@ -197,6 +200,11 @@ public class ChannelListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 public void onClick(View v) {
                     if (mService != null && mService.isConnected()) {
                         mService.HumlaSession().joinChannel(channel.getId());
+                        channel_id = channel.getId();
+                        SharedPreferences prefs = mContext.getSharedPreferences("mumla_channel_prefs", Context.MODE_PRIVATE);
+                        prefs.edit()
+                                .putInt("PREF_CHANNEL_ID", channel_id)   // save your static ChannelId
+                                .apply();
                     }
                 }
             });

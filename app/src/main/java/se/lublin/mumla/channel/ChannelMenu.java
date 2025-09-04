@@ -17,8 +17,11 @@
 
 package se.lublin.mumla.channel;
 
+import static se.lublin.mumla.channel.ChannelListAdapter.channel_id;
+
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
@@ -101,6 +104,10 @@ public class ChannelMenu implements PermissionsPopupMenu.IOnMenuPrepareListener,
 
         int itemId = item.getItemId();
         if (itemId == R.id.context_channel_join) {
+            SharedPreferences prefs = mContext.getSharedPreferences("mumla_channel_prefs", Context.MODE_PRIVATE);
+            prefs.edit()
+                    .putInt("PREF_CHANNEL_ID", channel_id)   // save your static ChannelId
+                    .apply();
             mService.HumlaSession().joinChannel(mChannel.getId());
         } else if (itemId == R.id.context_channel_add || itemId == R.id.context_channel_edit) {
             Bundle args = new Bundle();

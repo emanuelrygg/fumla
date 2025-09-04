@@ -22,19 +22,20 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.media.MediaRecorder;
-import android.media.session.MediaSession;
-import android.media.session.PlaybackState;
 import android.os.AsyncTask;
-
 import java.util.ArrayList;
+import java.util.List;
 
 import se.lublin.humla.HumlaService;
 import se.lublin.humla.model.Server;
 import se.lublin.mumla.R;
 import se.lublin.mumla.Settings;
+import se.lublin.mumla.db.DatabaseCertificate;
 import se.lublin.mumla.db.MumlaDatabase;
 import se.lublin.mumla.service.MumlaService;
+import se.lublin.mumla.util.DatabaseStore;
 import se.lublin.mumla.util.MumlaTrustStore;
+import se.lublin.mumla.util.ServerStore;
 
 /**
  * Constructs an intent for connection to a MumlaService and executes it.
@@ -60,7 +61,7 @@ public class ServerConnectTask extends AsyncTask<Server, Void, Intent> {
         int inputMethod = mSettings.getHumlaInputMethod();
 
         int audioSource = mSettings.isHandsetMode() ?
-                MediaRecorder.AudioSource.DEFAULT : MediaRecorder.AudioSource.MIC;
+                MediaRecorder.AudioSource.DEFAULT : MediaRecorder.AudioSource.VOICE_COMMUNICATION;
         int audioStream = mSettings.isHandsetMode() ?
                 AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC;
 
@@ -70,6 +71,28 @@ public class ServerConnectTask extends AsyncTask<Server, Void, Intent> {
         } catch (PackageManager.NameNotFoundException e) {
             e.printStackTrace();
         }
+
+        MumlaDatabase db = new DatabaseStore(mContext);
+        db.addServer(server);
+
+//        db.addPinnedChannel(server.getId(), mDatabase.getPinnedChannels(server.getId(0)));
+ //       db.addAccessToken(server.getId(), mDatabase.getAccessTokens(server.getId()).toString());
+ //       db.addLocalMutedUser(server.getId(), mDatabase.getLocalMutedUsers(server));
+ //       db.addPinnedChannel(server.getId(), mDatabase.getPinnedChannels();
+//        db.addCertificate("My PKCS12", mDatabase.getCertificateData(server.getId()));
+
+        ServerStore ss = new ServerStore(mContext);
+
+        if (server!=null) {
+//            long id = ss.upsertServer(server);   // assigns id if server.getId() == -1
+//            ss.setSelectedServerId(id);
+        }
+
+        List<Server> servere = db.getServers();
+        ss.setServers(servere);
+//        assert server != null;
+//        long id = ss.upsertServer(server);   // assigns id if server.getId() == -1
+//        ss.setSelectedServerId(id);
 
         Intent connectIntent = new Intent(mContext, MumlaService.class);
         connectIntent.putExtra(HumlaService.EXTRAS_SERVER, server);

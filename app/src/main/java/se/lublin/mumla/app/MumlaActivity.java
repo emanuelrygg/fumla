@@ -17,9 +17,13 @@
 
 package se.lublin.mumla.app;
 
+//import static se.lublin.mumla.service.MediaButtonService.mMediaSession;
+
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
@@ -28,6 +32,7 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
+import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
@@ -41,6 +46,8 @@ import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.EditText;
@@ -76,9 +83,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import info.guardianproject.netcipher.proxy.OrbotHelper;
 import se.lublin.humla.IHumlaService;
 import se.lublin.humla.IHumlaSession;
+import se.lublin.humla.audio.inputmode.ToggleInputMode;
 import se.lublin.humla.model.Server;
 import se.lublin.humla.net.HumlaConnection;
 import se.lublin.humla.protobuf.Mumble;
+import se.lublin.humla.protocol.AudioHandler;
 import se.lublin.humla.util.HumlaException;
 import se.lublin.humla.util.HumlaObserver;
 import se.lublin.humla.util.MumbleURLParser;
@@ -87,6 +96,7 @@ import se.lublin.mumla.R;
 import se.lublin.mumla.Settings;
 import se.lublin.mumla.channel.AccessTokenFragment;
 import se.lublin.mumla.channel.ChannelFragment;
+import se.lublin.mumla.channel.MainFragment;
 import se.lublin.mumla.channel.ServerInfoFragment;
 import se.lublin.mumla.db.DatabaseCertificate;
 import se.lublin.mumla.db.DatabaseProvider;
@@ -98,7 +108,9 @@ import se.lublin.mumla.preference.Preferences;
 import se.lublin.mumla.servers.FavouriteServerListFragment;
 import se.lublin.mumla.servers.PublicServerListFragment;
 import se.lublin.mumla.servers.ServerEditFragment;
+import se.lublin.mumla.service.BatteryOptHelper;
 import se.lublin.mumla.service.IMumlaService;
+import se.lublin.mumla.service.MediaButtonService;
 import se.lublin.mumla.service.MumlaService;
 import se.lublin.mumla.util.HumlaServiceFragment;
 import se.lublin.mumla.util.HumlaServiceProvider;
@@ -124,10 +136,18 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     private ListView mDrawerList;
     private DrawerAdapter mDrawerAdapter;
 
+    public static boolean toogleformediasession = false;
+
     private static final int PERMISSIONS_REQUEST_RECORD_AUDIO = 1;
     private static final int PERMISSIONS_REQUEST_POST_NOTIFICATIONS = 2;
     private Server mServerPendingPerm = null;
     private boolean mPermPostNotificationsAsked = false;
+    public static MediaSession mMediaSession;
+    private static boolean pttActive = false;
+
+    private static long lastTalkDownTime = 0;
+    private static final long MIN_TALK_DURATION_MS = 200;
+
 
     private ProgressDialog mConnectingDialog;
     private AlertDialog mErrorDialog;
@@ -135,6 +155,54 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
 
     /** List of fragments to be notified about service state changes. */
     private List<HumlaServiceFragment> mServiceFragments = new ArrayList<HumlaServiceFragment>();
+
+    private static final int PTT_KEYCODE  = 400; // from your logs
+    private static final int PTT_SCANCODE = 752; // from your logs
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        if (e.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+            keyaction(e); //Consumes the events and avoid Gemini
+            return true;
+        }
+        else if ((e.getKeyCode() == PTT_KEYCODE) || (e.getScanCode() == PTT_SCANCODE)) {
+            if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
+                MumlaService.instance.onTalkKeyDown();
+            } else if (e.getAction() == KeyEvent.ACTION_UP) {
+                MumlaService.instance.onTalkKeyUp();
+            }
+            return true;
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
+    private boolean keyaction(KeyEvent e)
+    {
+        if (e.getAction() == KeyEvent.ACTION_DOWN)
+        {
+            toogleformediasession = true;
+//            if (!pttActive) {
+//                lastTalkDownTime = System.currentTimeMillis();
+//                pttActive = true;
+                if (MumlaService.instance != null) {
+                    MumlaService.instance.onTalkKeyDown();
+                }
+            //}
+            toogleformediasession = false;
+        }
+        else if (e.getAction() == KeyEvent.ACTION_UP)
+        {
+            toogleformediasession = true;
+  //              if (pttActive) {
+   //                 pttActive = false;
+                    if (MumlaService.instance != null) {
+                        MumlaService.instance.onTalkKeyUp();
+ //                   }
+                }
+            toogleformediasession = false;
+        }
+        return true;
+    }
 
     private ServiceConnection mConnection = new ServiceConnection() {
         @Override
@@ -270,6 +338,8 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
 
         setStayAwake(mSettings.shouldStayAwake());
 
+        BatteryOptHelper.promptIgnoreBatteryOptimizations(this);
+
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
         preferences.registerOnSharedPreferenceChangeListener(this);
 
@@ -305,7 +375,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
             }
         };
 
-
+        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 123);
 
         mDrawerLayout.setDrawerListener(mDrawerToggle);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
@@ -354,7 +424,51 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
         if (mSettings.isFirstRun()) {
             showFirstRunGuide();
         }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.RECORD_AUDIO},
+                    123); // requestCode, any int
+        }
+
+        if (mMediaSession==null)
+        {
+            ensureMediaSession(getApplicationContext());
+        }
     }
+
+    @SuppressLint("SuspiciousIndentation")
+    public void ensureMediaSession(Context context) {
+        if (mMediaSession == null) {
+            mMediaSession = new MediaSession(context, "MumlaSession");
+              mMediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS);
+                  mMediaSession.setPlaybackState(new PlaybackState.Builder()
+                         .setState(PlaybackState.STATE_PLAYING, 0, 1.0f)
+                         .build());
+                  mMediaSession.setActive(true);
+            AudioAttributes attrs = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build();
+            mMediaSession.setPlaybackToLocal(attrs);
+
+            mMediaSession.setCallback(new MediaSession.Callback() {
+                @Override
+                public boolean onMediaButtonEvent(@NonNull Intent mediaButtonIntent) {
+                    KeyEvent event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                    if (event == null)
+                        return super.onMediaButtonEvent(mediaButtonIntent);
+                    keyaction(event);
+                    return super.onMediaButtonEvent(mediaButtonIntent);
+                }
+            });
+        } //else if (!mMediaSession.isActive()) {
+          mMediaSession.setActive(true);
+        // }
+    }
+
 
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
@@ -367,6 +481,19 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
         super.onResume();
         Intent connectIntent = new Intent(this, MumlaService.class);
         bindService(connectIntent, mConnection, 0);
+
+        WindowInsetsController c = null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            c = getWindow().getInsetsController();
+        }
+        if (c != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                c.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
+            }
+        }
     }
 
     @Override
@@ -510,6 +637,9 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
         Class<? extends Fragment> fragmentClass = null;
         Bundle args = new Bundle();
         switch (fragmentId) {
+            case DrawerAdapter.ITEM_MAIN:
+                fragmentClass = MainFragment.class;
+                break;
             case DrawerAdapter.ITEM_SERVER:
                 fragmentClass = ChannelFragment.class;
                 break;
@@ -622,7 +752,6 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
                 }
             }
         }
-
         ServerConnectTask connectTask = new ServerConnectTask(this, mDatabase);
         connectTask.execute(server);
     }
@@ -737,6 +866,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
         switch (mService.getConnectionState()) {
             case CONNECTING:
                 Server server = service.getTargetServer();
+                MumlaService.staticserver = server;
                 mConnectingDialog = new ProgressDialog(this);
                 mConnectingDialog.setIndeterminate(true);
                 mConnectingDialog.setCancelable(true);

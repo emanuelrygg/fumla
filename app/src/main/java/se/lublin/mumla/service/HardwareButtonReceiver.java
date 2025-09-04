@@ -17,9 +17,15 @@
 
 package se.lublin.mumla.service;
 
+import static se.lublin.mumla.Settings.PREF_PUSH_KEY;
+
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.preference.PreferenceCategory;
+import android.preference.PreferenceManager;
+import android.preference.PreferenceScreen;
 import android.util.Log;
 import android.view.KeyEvent;
 import se.lublin.mumla.service.MumlaService;
@@ -35,15 +41,24 @@ public class HardwareButtonReceiver extends BroadcastReceiver {
 
         Log.i("PTTReceiver", "Received action: " + action);
 
-        try {
-            if ("com.sonim.intent.action.PTT_KEY_DOWN".equals(action)) {
-                MumlaService.instance.onTalkKeyDown();
-            } else if ("com.sonim.intent.action.PTT_KEY_UP".equals(action)) {
-                MumlaService.instance.onTalkKeyUp();
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
+        String pttkey = preferences.getString("ptt_settings", null);
+    //    if ((int)(boolean) pttkey.equals(event.getKeyCode()))
+    //    {
+            try
+            {
+                if ("com.sonim.intent.action.PTT_KEY_DOWN".equals(action)) {
+                    MumlaService.instance.onTalkKeyDown();
+                } else if ("com.sonim.intent.action.PTT_KEY_UP".equals(action)) {
+                    MumlaService.instance.onTalkKeyUp();
+                }
             }
-        } catch (NullPointerException e) {
-            Log.w("PTTReceiver", "MumlaService.instance was null — ignoring " + action);
-        }
+            catch (NullPointerException e)
+            {
+                Log.w("PTTReceiver", "MumlaService.instance was null — ignoring " + action);
+            }
+   //     }
+
     }
 
 

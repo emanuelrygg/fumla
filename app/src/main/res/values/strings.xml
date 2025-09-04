@@ -26,8 +26,20 @@
     <string name="drawer_tokens">Access Tokens</string>
     <string name="drawer_pinned">Pinned Channels</string>
     <string name="drawer_header_servers">Servers</string>
+    <string name="drawer_main">Main</string>
     <string name="drawer_favorites">Favorites</string>
     <string name="drawer_public">Public Servers</string>
+
+    <!-- res/values/strings.xml -->
+    <string name="touch_and_hold_to_talk">Touch and hold to talk.</string>
+    <string name="push_to_talk">Push‑to‑talk</string>
+    <string name="available">Available</string>
+    <string name="muted">Muted</string>
+    <string name="network_quality">Network quality</string>
+    <string name="not_connected">Not connected</string>
+    <string name="unknown_channel">Unknown channel</string>
+    <string name="disconnected">Disconnected</string>
+
 
     <!-- Chat formatting -->
     <string name="chat_message_to">%1$s → %2$s</string>

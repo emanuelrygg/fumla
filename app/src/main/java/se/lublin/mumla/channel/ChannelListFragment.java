@@ -19,6 +19,8 @@ package se.lublin.mumla.channel;
 
 import static android.content.Context.RECEIVER_NOT_EXPORTED;
 
+import static se.lublin.mumla.channel.ChannelListAdapter.channel_id;
+
 import android.app.Activity;
 import android.app.SearchManager;
 import android.content.BroadcastReceiver;

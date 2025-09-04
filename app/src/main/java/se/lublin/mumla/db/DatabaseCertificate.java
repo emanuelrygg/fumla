@@ -25,7 +25,7 @@ public class DatabaseCertificate {
     private final long mId;
     private final String mName;
 
-    protected DatabaseCertificate(long id, String name) {
+    public DatabaseCertificate(long id, String name) {
         mId = id;
         mName = name;
     }

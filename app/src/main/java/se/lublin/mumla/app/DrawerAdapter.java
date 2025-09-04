@@ -51,6 +51,7 @@ public class DrawerAdapter extends ArrayAdapter<DrawerAdapter.DrawerRow> {
     // Drawer rows, integer value is id
     public static final int HEADER_CONNECTED_SERVER = 0;
     public static final int ITEM_SERVER = 1;
+    public static final int ITEM_MAIN = 12;
     public static final int ITEM_PINNED_CHANNELS = 2;
     public static final int ITEM_INFO = 3;
     public static final int ITEM_ACCESS_TOKENS = 4;
@@ -92,12 +93,13 @@ public class DrawerAdapter extends ArrayAdapter<DrawerAdapter.DrawerRow> {
         }
     }
 
-    private DrawerDataProvider mProvider;
+    public static DrawerDataProvider mProvider;
 
     public DrawerAdapter(Context context, DrawerDataProvider provider) {
         super(context, 0);
         mProvider = provider;
         add(new DrawerAdapter.DrawerHeader(HEADER_CONNECTED_SERVER, context.getString(R.string.drawer_not_connected)));
+        add(new DrawerAdapter.DrawerItem(ITEM_MAIN, context.getString(R.string.drawer_main), R.drawable.ic_action_audio));
         add(new DrawerAdapter.DrawerItem(ITEM_SERVER, context.getString(R.string.drawer_server), R.drawable.ic_action_channels));
         add(new DrawerAdapter.DrawerItem(ITEM_PINNED_CHANNELS, context.getString(R.string.drawer_pinned), R.drawable.ic_action_comment));
         add(new DrawerAdapter.DrawerItem(ITEM_INFO, context.getString(R.string.information), R.drawable.ic_action_info_dark));

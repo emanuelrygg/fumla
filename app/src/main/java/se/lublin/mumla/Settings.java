@@ -238,7 +238,7 @@ public class Settings {
         String method = preferences.getString(PREF_INPUT_METHOD, ARRAY_INPUT_METHOD_VOICE);
         if(!ARRAY_INPUT_METHODS.contains(method)) {
             // Set default method for users who used to use handset mode before removal.
-            method = ARRAY_INPUT_METHOD_VOICE;
+            method = ARRAY_INPUT_METHOD_PTT;
         }
         return method;
     }
