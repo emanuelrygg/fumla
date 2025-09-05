@@ -37,7 +37,9 @@ import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
 import android.speech.tts.TextToSpeech;
@@ -97,12 +99,14 @@ public class MumlaService extends HumlaService implements
     public static final int RECONNECT_DELAY = 10000;
 
     private IHumlaService mService;
+
+    private boolean Doubleclickflag = false;
     public static Server staticserver;
 
     public static MumlaDatabase staticDatabase;
 
     public static final int NOTIF_ID = 42;
-    private static final String NOTIF_CHANNEL = "voice_foreground";
+//    private static final String NOTIF_CHANNEL = "voice_foreground";
 
     private static final String NOTIF_CHANNEL_SHARED = "voice_foreground";
     private static final int NOTIFICATION_ID = 1001;
@@ -141,7 +145,8 @@ public class MumlaService extends HumlaService implements
         startForeground(NOTIF_ID, notification);
         Log.d("Autoconnect", "OnStartCommand");
         if (intent != null && BootReceiver.ACTION_AUTOCONNECT.equals(intent.getAction())) {
-            ensureForegroundNotification("Reconnecting…");  // within 5s
+            notification = createServiceNotification("Connecting...", "Mumla is reconnecting to previous server");
+            startForeground(NOTIF_ID, notification);
             Log.d("Autoconnect", "Bootloader intent received");
             autoConnectFromPrefs();
             return START_STICKY;
@@ -149,29 +154,8 @@ public class MumlaService extends HumlaService implements
         return super.onStartCommand(intent, flags, startId);
     }
 
-    private void ensureForegroundNotification(String text) {
-        Notification notification2 = createServiceNotification("Connecting...", "Mumla is reconnecting to previous channel");
-        startForeground(32, notification2);
-    }
 
-    private void ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    NOTIF_CHANNEL_SHARED,
-                    "Mumla Service",
-                    NotificationManager.IMPORTANCE_LOW
-            );
-            channel.setDescription("Ongoing voice connection");
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            if (nm != null) {
-                nm.createNotificationChannel(channel);
-            }
-        }
-    }
-
-    private Notification createServiceNotification(String title, String text) {
-        ensureNotificationChannel();
-
+    public Notification createServiceNotification(String title, String text) {
         return new NotificationCompat.Builder(this, NOTIF_CHANNEL_SHARED)
                 .setContentTitle(title)
                 .setContentText(text)
@@ -185,9 +169,7 @@ public class MumlaService extends HumlaService implements
 
     private void autoConnectFromPrefs() {
         final Context c = getApplicationContext();
-
         MumlaDatabase db = new DatabaseStore(c);
-
         Log.d("Autoconnect", "Trying to autoconnect from prefs");
 
 //        Server ser = new ServerStore(c).getSelectedServer();
@@ -201,7 +183,7 @@ public class MumlaService extends HumlaService implements
 
         } catch (Throwable t) {
             Log.d("Autoconnect", "Exception during autoconnect from prefs");
-            updateNotification("Reconnect failed: " + t.getMessage());
+//            updateNotification("Reconnect failed: " + t.getMessage());
         }
         SharedPreferences prefs = getApplicationContext().getSharedPreferences("mumla_channel_prefs", Context.MODE_PRIVATE);
         int channelId = prefs.getInt("PREF_CHANNEL_ID", -1);  // -1 is default if not set
@@ -209,13 +191,7 @@ public class MumlaService extends HumlaService implements
         {
 //            mService.HumlaSession().joinChannel(channelId);
             Log.d("Autoconnect", "Tried to join channel");
-
         }
-
-    }
-
-    private void updateNotification(String text) {
-        // Update the same NOTIF_ID with new content text
     }
 
 
@@ -413,16 +389,10 @@ public class MumlaService extends HumlaService implements
 
     public static MumlaService instance;
 
-
     @Override
     public void onCreate() {
         super.onCreate();
         instance = this;
-
-
-        registerObserver(mObserver);
-
-        Log.i("Media Session", "Preparing to start mMediaSession");
 
         registerObserver(mObserver);
 
@@ -761,23 +731,29 @@ public class MumlaService extends HumlaService implements
 
     /**
      * Called when a user presses a talk key down (i.e. when they want to talk).
-     * Accounts for talk logic if toggle PTT is on.
+     * Accounts for talk logicChoose Boot Java Runtime for the IDE if toggle PTT is on.
      */
+
     @Override
     public void onTalkKeyDown() {
-        Log.i("Talk key down", "Function reached");
-
         if (isConnectionEstablished()
                 && Settings.ARRAY_INPUT_METHOD_PTT.equals(mSettings.getInputMethod())) {
-            Log.i("Talk key down sent", "Connection established");
-
-            setTalkingState(true);
-            if (mSettings.isPushToTalkToggle() || toogleformediasession) {
+            if (Doubleclickflag)
+            {
+                Doubleclickflag = false;
+            }
+            else {
+                setTalkingState(true);
+                if (toogleformediasession)
+                {
+                    Doubleclickflag = true;
+                }
+                if (mSettings.isPushToTalkToggle()) {
                     setTalkingState(!isTalking());
+                }
             }
         }
     }
-
 
 
     /**
@@ -789,9 +765,14 @@ public class MumlaService extends HumlaService implements
         Log.i("Talk key up", "Function reached");
         if(isConnectionEstablished()
                 && Settings.ARRAY_INPUT_METHOD_PTT.equals(mSettings.getInputMethod())) {
-            Log.i("Talk key up sent", "Connection estblished");
-            if ((!toogleformediasession || !mSettings.isPushToTalkToggle()) && isTalking())  {
+            Log.i("Talk key up sent", "Connection established");
+            if (Doubleclickflag)
+            {
+                //Ignore the next if
+            }
+            else if (!mSettings.isPushToTalkToggle() && isTalking())  {
                 setTalkingState(false); // Stop talking
+             //   Doubleclickflag = true;
                 Log.i("Talk key up sent", "Toggling");
             }
         }

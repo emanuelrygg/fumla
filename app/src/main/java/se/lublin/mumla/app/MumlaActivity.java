@@ -17,13 +17,10 @@
 
 package se.lublin.mumla.app;
 
-//import static se.lublin.mumla.service.MediaButtonService.mMediaSession;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
 import android.content.ComponentName;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
@@ -32,14 +29,12 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
-import android.media.AudioAttributes;
 import android.media.AudioManager;
-import android.media.session.MediaSession;
-import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
+import android.provider.MediaStore;
 import android.text.InputType;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -56,6 +51,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -78,6 +74,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import info.guardianproject.netcipher.proxy.OrbotHelper;
@@ -142,12 +139,6 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     private static final int PERMISSIONS_REQUEST_POST_NOTIFICATIONS = 2;
     private Server mServerPendingPerm = null;
     private boolean mPermPostNotificationsAsked = false;
-    public static MediaSession mMediaSession;
-    private static boolean pttActive = false;
-
-    private static long lastTalkDownTime = 0;
-    private static final long MIN_TALK_DURATION_MS = 200;
-
 
     private ProgressDialog mConnectingDialog;
     private AlertDialog mErrorDialog;
@@ -162,7 +153,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
-            keyaction(e); //Consumes the events and avoid Gemini
+            MediaButtonService.keyaction(e); //Consumes the events and avoid Gemini
             return true;
         }
         else if ((e.getKeyCode() == PTT_KEYCODE) || (e.getScanCode() == PTT_SCANCODE)) {
@@ -174,34 +165,6 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
             return true;
         }
         return super.dispatchKeyEvent(e);
-    }
-
-    private boolean keyaction(KeyEvent e)
-    {
-        if (e.getAction() == KeyEvent.ACTION_DOWN)
-        {
-            toogleformediasession = true;
-//            if (!pttActive) {
-//                lastTalkDownTime = System.currentTimeMillis();
-//                pttActive = true;
-                if (MumlaService.instance != null) {
-                    MumlaService.instance.onTalkKeyDown();
-                }
-            //}
-            toogleformediasession = false;
-        }
-        else if (e.getAction() == KeyEvent.ACTION_UP)
-        {
-            toogleformediasession = true;
-  //              if (pttActive) {
-   //                 pttActive = false;
-                    if (MumlaService.instance != null) {
-                        MumlaService.instance.onTalkKeyUp();
- //                   }
-                }
-            toogleformediasession = false;
-        }
-        return true;
     }
 
     private ServiceConnection mConnection = new ServiceConnection() {
@@ -375,10 +338,9 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
             }
         };
 
-        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 123);
 
         mDrawerLayout.setDrawerListener(mDrawerToggle);
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        Objects.requireNonNull(getSupportActionBar()).setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setHomeButtonEnabled(true);
 
         AlertDialog.Builder dadb = new AlertDialog.Builder(this);
@@ -421,53 +383,17 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
         setVolumeControlStream(mSettings.isHandsetMode() ?
                 AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC);
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent Mediabuttonservice = new Intent(this, MediaButtonService.class);
+            startForegroundService(Mediabuttonservice);
+
+        }
+
         if (mSettings.isFirstRun()) {
             showFirstRunGuide();
         }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
-
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.RECORD_AUDIO},
-                    123); // requestCode, any int
-        }
-
-        if (mMediaSession==null)
-        {
-            ensureMediaSession(getApplicationContext());
-        }
     }
 
-    @SuppressLint("SuspiciousIndentation")
-    public void ensureMediaSession(Context context) {
-        if (mMediaSession == null) {
-            mMediaSession = new MediaSession(context, "MumlaSession");
-              mMediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS);
-                  mMediaSession.setPlaybackState(new PlaybackState.Builder()
-                         .setState(PlaybackState.STATE_PLAYING, 0, 1.0f)
-                         .build());
-                  mMediaSession.setActive(true);
-            AudioAttributes attrs = new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build();
-            mMediaSession.setPlaybackToLocal(attrs);
-
-            mMediaSession.setCallback(new MediaSession.Callback() {
-                @Override
-                public boolean onMediaButtonEvent(@NonNull Intent mediaButtonIntent) {
-                    KeyEvent event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
-                    if (event == null)
-                        return super.onMediaButtonEvent(mediaButtonIntent);
-                    keyaction(event);
-                    return super.onMediaButtonEvent(mediaButtonIntent);
-                }
-            });
-        } //else if (!mMediaSession.isActive()) {
-          mMediaSession.setActive(true);
-        // }
-    }
 
 
     @Override
@@ -476,6 +402,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
         mDrawerToggle.syncState();
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.S)
     @Override
     protected void onResume() {
         super.onResume();
@@ -487,12 +414,8 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
             c = getWindow().getInsetsController();
         }
         if (c != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                c.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
-            }
+            c.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+            c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
         }
     }
 
@@ -528,7 +451,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
         disconnectButton.setVisible(mService != null && mService.isConnected());
 
         // Color the action bar icons to the primary text color of the theme.
-        int foregroundColor = getSupportActionBar().getThemedContext()
+        @SuppressLint("Recycle") int foregroundColor = Objects.requireNonNull(getSupportActionBar()).getThemedContext()
                 .obtainStyledAttributes(new int[] { android.R.attr.textColor })
                 .getColor(0, -1);
         for(int x=0;x<menu.size();x++) {
@@ -550,7 +473,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if(mDrawerToggle.onOptionsItemSelected(item))
             return true;
         if (item.getItemId() == R.id.action_disconnect) {
@@ -561,7 +484,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     }
 
     @Override
-    public void onConfigurationChanged(Configuration newConfig) {
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         mDrawerToggle.onConfigurationChanged(newConfig);
     }
@@ -953,8 +876,6 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
                     mErrorDialog = ab.show();
                 }
                 break;
-
-
         }
     }
 

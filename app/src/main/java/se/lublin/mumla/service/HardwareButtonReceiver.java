@@ -41,8 +41,8 @@ public class HardwareButtonReceiver extends BroadcastReceiver {
 
         Log.i("PTTReceiver", "Received action: " + action);
 
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
-        String pttkey = preferences.getString("ptt_settings", null);
+  //      SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
+    //    String pttkey = preferences.getString("ptt_settings", null);
     //    if ((int)(boolean) pttkey.equals(event.getKeyCode()))
     //    {
             try
