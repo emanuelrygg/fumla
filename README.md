@@ -1,4 +1,4 @@
-# Mumla
+# Fumla (Mumla)
 
 Fumla is a fork from Mumla, with the ambition to make the app more intuitive inspired 
 by Zello and also add the ability to use programmable buttons for PTT during dark screen. 
