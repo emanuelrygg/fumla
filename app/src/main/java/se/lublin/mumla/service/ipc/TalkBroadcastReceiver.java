@@ -20,6 +20,7 @@ package se.lublin.mumla.service.ipc;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.util.Log;
 
 import se.lublin.humla.IHumlaService;
 import se.lublin.humla.IHumlaSession;
@@ -49,10 +50,13 @@ public class TalkBroadcastReceiver extends BroadcastReceiver {
             String status = intent.getStringExtra(EXTRA_TALK_STATUS);
             if (status == null) status = TALK_STATUS_TOGGLE;
             if (TALK_STATUS_ON.equals(status)) {
+                Log.i("Key", "Talks status equals true");
                 session.setTalkingState(true);
             } else if (TALK_STATUS_OFF.equals(status)) {
+                Log.i("Key", "Talks status equals false");
                 session.setTalkingState(false);
             } else if (TALK_STATUS_TOGGLE.equals(status)) {
+                Log.i("Key", "Talks status toggle");
                 session.setTalkingState(!session.isTalking());
             }
         } else {

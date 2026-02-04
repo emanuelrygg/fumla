@@ -17,6 +17,9 @@
 
 package se.lublin.mumla.app;
 
+import static se.lublin.mumla.servers.FavouriteServerListFragment.mConnectHandler;
+import static se.lublin.mumla.servers.FavouriteServerListFragment.mServerAdapter;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
@@ -27,6 +30,7 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import androidx.fragment.app.FragmentActivity;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
@@ -150,22 +154,29 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     private static final int PTT_KEYCODE  = 400; // from your logs
     private static final int PTT_SCANCODE = 752; // from your logs
 
+
+/*
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
+        Log.i("Key", "Key event dispatched");
         if (e.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+            Log.i("Key", "Key code media play pause");
             MediaButtonService.keyaction(e); //Consumes the events and avoid Gemini
             return true;
         }
         else if ((e.getKeyCode() == PTT_KEYCODE) || (e.getScanCode() == PTT_SCANCODE)) {
+            Log.i("Key", "Key code ptt or scancode");
             if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
-                MumlaService.instance.onTalkKeyDown();
+      //          MumlaService.instance.onTalkKeyDown();
             } else if (e.getAction() == KeyEvent.ACTION_UP) {
-                MumlaService.instance.onTalkKeyUp();
+         //       MumlaService.instance.onTalkKeyUp();
             }
             return true;
         }
         return super.dispatchKeyEvent(e);
     }
+*/
+
 
     private ServiceConnection mConnection = new ServiceConnection() {
         @Override
@@ -328,6 +339,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
                     IHumlaSession session = getService().HumlaSession();
                     if (session.isTalking() && !mSettings.isPushToTalkToggle()) {
                         session.setTalkingState(false);
+                        Log.i("Key", "Talks status is push to talk toggle");
                     }
                 }
             }
@@ -380,12 +392,12 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
             }
         }
 
-        setVolumeControlStream(mSettings.isHandsetMode() ?
+       setVolumeControlStream(mSettings.isHandsetMode() ?
                 AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Intent Mediabuttonservice = new Intent(this, MediaButtonService.class);
-            startForegroundService(Mediabuttonservice);
+            startService(Mediabuttonservice);
 
         }
 
@@ -417,6 +429,13 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
             c.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
             c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
         }
+
+//        mConnectHandler.connectToServer(mServerAdapter.getItem(0));
+        Intent i = new Intent(this, MumlaService.class);
+//        i.setAction(MumlaService.ACTION_CONNECT);
+        startForegroundService(i); // NÅ er bruker i foreground → LOVLIG
+
+
     }
 
     @Override
@@ -492,7 +511,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (mService != null && keyCode == mSettings.getPushToTalkKey()) {
-            mService.onTalkKeyDown();
+        //    mService.onTalkKeyDown();
             return true;
         }
         return super.onKeyDown(keyCode, event);
@@ -501,7 +520,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (mService != null && keyCode == mSettings.getPushToTalkKey()) {
-            mService.onTalkKeyUp();
+       //     mService.onTalkKeyUp();
             return true;
         }
         return super.onKeyUp(keyCode, event);

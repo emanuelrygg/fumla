@@ -181,6 +181,7 @@ public class DrawerAdapter extends ArrayAdapter<DrawerAdapter.DrawerRow> {
             switch ((int) getItemId(position)) {
                 case ITEM_SERVER:
                 case ITEM_INFO:
+                case ITEM_MAIN:
                 case ITEM_ACCESS_TOKENS:
                 case ITEM_PINNED_CHANNELS:
                     return mProvider.isConnected();

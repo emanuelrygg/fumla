@@ -21,7 +21,7 @@ buildscript {
         google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.1.4'
+        classpath 'com.android.tools.build:gradle:8.3.2'
     }
 }
 apply plugin: 'com.android.application'
@@ -46,9 +46,11 @@ def signingBetaFile = file 'signing-beta.gradle'
 if (signingBetaFile.exists()) apply from: signingBetaFile
 
 allprojects {
-    tasks.withType(JavaCompile) {
-        // TODO include deprecations at some point, but currently they are *many*
-        options.compilerArgs << "-Xlint:all" << "-Xlint:-deprecation" << "-Xlint:-dep-ann"
+    tasks.withType(JavaCompile).tap {
+        configureEach {
+            // TODO include deprecations at some point, but currently they are *many*
+            options.compilerArgs << "-Xlint:all" << "-Xlint:-deprecation" << "-Xlint:-dep-ann"
+        }
     }
 }
 
@@ -131,7 +133,7 @@ android {
     }
     // betas may be released every minute
     // TODO? dynamic stuff, have to rebuild a lot
-    applicationVariants.all { variant ->
+    applicationVariants.configureEach { variant ->
         if (variant.flavorName == "beta") {
             variant.outputs.each { output ->
                 output.versionCodeOverride = System.currentTimeSeconds() / 60

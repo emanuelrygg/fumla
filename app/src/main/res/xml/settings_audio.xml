@@ -75,6 +75,13 @@
             android:key="hidePtt"
             android:summary="@string/hidePttSum"
             android:title="@string/hidePtt" />
+
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="toggleAutoLogin"
+            android:summary="Ensures connectivity whenever possible"
+            android:title="Auto login into your nr. 1 favourite server" />
+
         <CheckBoxPreference
             android:defaultValue="false"
             android:key="togglePtt"

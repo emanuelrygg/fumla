@@ -7,11 +7,10 @@
         android:name="android.hardware.microphone"
         android:required="false" />
 
-    <uses-permission android:name="android.permission.BROADCAST_CLOSE_SYSTEM_DIALOGS" />
+    <uses-permission android:name="android.permission.BROADCAST_CLOSE_SYSTEM_DIALOGS"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"
-        android:minSdkVersion="34" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission
@@ -24,6 +23,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -66,19 +66,19 @@
         <service
             android:name=".service.MediaButtonService"
             android:exported="false"
-            android:foregroundServiceType="microphone"
-            android:stopWithTask="false" />
+            android:foregroundServiceType="microphone|mediaPlayback"
+            android:stopWithTask="false"
+            tools:ignore="ForegroundServicePermission" />
 
         <receiver
             android:name=".BootReceiver"
-            android:directBootAware="true"
             android:enabled="true"
-            android:exported="true"
-            tools:ignore="UnusedAttribute">
+            android:exported="false">
             <intent-filter>
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
         <service
             android:name=".service.PttKeyAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
@@ -129,6 +129,10 @@
             android:exported="true"
             android:foregroundServiceType="microphone|dataSync"
             android:stopWithTask="false" />
+
+        <service
+            android:name=".service.AutoconnectService"
+            android:exported="false" />
 
         <activity
             android:name=".app.MumlaActivity"

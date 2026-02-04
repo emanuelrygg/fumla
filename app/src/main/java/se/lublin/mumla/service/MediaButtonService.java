@@ -21,11 +21,14 @@ import static android.content.ContentValues.TAG;
 
 import android.annotation.SuppressLint;
 import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.session.MediaSession;
+import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -40,13 +43,9 @@ public class MediaButtonService extends Service {
 
     public static MediaSession mMediaSession;
 
-    private static final String NOTIF_CHANNEL_SHARED = "voice_foreground";
     @Override
     public void onCreate() {
         super.onCreate();
-
-        Notification notification = createServiceNotification("Mediasession", "Listening to media input");
-        startForeground(99, notification);
 
         ensureMediaSession(this);
     }
@@ -62,36 +61,29 @@ public class MediaButtonService extends Service {
         return flags;
     }
 
-    public Notification createServiceNotification(String title, String text) {
-        return new NotificationCompat.Builder(this, NOTIF_CHANNEL_SHARED)
-                .setContentTitle(title)
-                .setContentText(text)
-                .setSmallIcon(R.drawable.ic_mumla) // replace with your app’s status icon
-                .setOngoing(true)
-                .setForegroundServiceBehavior(
-                        NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE
-                )
-                .build();
-    }
-
+    public static boolean justtoggled = false;
 
     public static boolean keyaction(KeyEvent e)
     {
-        if (e.getAction() == KeyEvent.ACTION_DOWN)
+        Log.i("Key", "Key event happened");
+        if (e.getAction() == KeyEvent.ACTION_UP)
         {
-            MumlaActivity.toogleformediasession = true;
-            if (MumlaService.instance != null) {
-                MumlaService.instance.onTalkKeyDown();
+            if (!justtoggled)
+            {
+                if (MumlaOverlay.mService != null) {
+                   // MumlaOverlay.mService.setTalkingState(true);
+                }
+                Log.i("Key", "Talking state set true");
+                justtoggled=true;
             }
-            MumlaActivity.toogleformediasession = false;
-        }
-        else if (e.getAction() == KeyEvent.ACTION_UP)
-        {
-            MumlaActivity.toogleformediasession = true;
-            if (MumlaService.instance != null) {
-                MumlaService.instance.onTalkKeyUp();
+            else
+            {
+                if (MumlaOverlay.mService != null) {
+               //     MumlaOverlay.mService.setTalkingState(false);
+                }
+                Log.i("Key", "Talking state set false");
+                justtoggled=false;
             }
-            MumlaActivity.toogleformediasession = false;
         }
         return true;
     }
@@ -106,7 +98,7 @@ public class MediaButtonService extends Service {
                     .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build();
-//            mMediaSession.setPlaybackToLocal(attrs);
+            mMediaSession.setPlaybackToLocal(attrs);
             mMediaSession.setCallback(new MediaSession.Callback() {
                 @Override
                 public boolean onMediaButtonEvent(@NonNull Intent mediaButtonIntent) {

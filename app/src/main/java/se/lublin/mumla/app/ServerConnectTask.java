@@ -72,28 +72,6 @@ public class ServerConnectTask extends AsyncTask<Server, Void, Intent> {
             e.printStackTrace();
         }
 
-        MumlaDatabase db = new DatabaseStore(mContext);
-        db.addServer(server);
-
-//        db.addPinnedChannel(server.getId(), mDatabase.getPinnedChannels(server.getId(0)));
- //       db.addAccessToken(server.getId(), mDatabase.getAccessTokens(server.getId()).toString());
- //       db.addLocalMutedUser(server.getId(), mDatabase.getLocalMutedUsers(server));
- //       db.addPinnedChannel(server.getId(), mDatabase.getPinnedChannels();
-//        db.addCertificate("My PKCS12", mDatabase.getCertificateData(server.getId()));
-
-        ServerStore ss = new ServerStore(mContext);
-
-        if (server!=null) {
-//            long id = ss.upsertServer(server);   // assigns id if server.getId() == -1
-//            ss.setSelectedServerId(id);
-        }
-
-        List<Server> servere = db.getServers();
-        ss.setServers(servere);
-//        assert server != null;
-//        long id = ss.upsertServer(server);   // assigns id if server.getId() == -1
-//        ss.setSelectedServerId(id);
-
         Intent connectIntent = new Intent(mContext, MumlaService.class);
         connectIntent.putExtra(HumlaService.EXTRAS_SERVER, server);
         connectIntent.putExtra(HumlaService.EXTRAS_CLIENT_NAME, mContext.getString(R.string.app_name)+" "+applicationVersion);

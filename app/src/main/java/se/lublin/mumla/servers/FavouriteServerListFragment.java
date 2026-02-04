@@ -30,6 +30,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.GridView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
@@ -38,8 +39,11 @@ import java.util.List;
 
 import se.lublin.humla.model.Server;
 import se.lublin.mumla.R;
+import se.lublin.mumla.Settings;
+import se.lublin.mumla.app.MumlaActivity;
 import se.lublin.mumla.db.DatabaseProvider;
 import se.lublin.mumla.db.PublicServer;
+import se.lublin.mumla.preference.Preferences;
 
 /**
  * Displays a list of servers, and allows the user to connect and edit them.
@@ -48,10 +52,10 @@ import se.lublin.mumla.db.PublicServer;
  */
 public class FavouriteServerListFragment extends Fragment implements OnItemClickListener, FavouriteServerAdapter.FavouriteServerAdapterMenuListener {
 
-    private ServerConnectHandler mConnectHandler;
+    public static ServerConnectHandler mConnectHandler;
     private DatabaseProvider mDatabaseProvider;
     private GridView mServerGrid;
-    private ServerAdapter<Server> mServerAdapter;
+    public static ServerAdapter<Server> mServerAdapter;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -93,6 +97,15 @@ public class FavouriteServerListFragment extends Fragment implements OnItemClick
     public void onResume() {
         super.onResume();
         updateServers();
+        if (!mServerAdapter.isEmpty() && Settings.getInstance(getActivity()).isAutoLoginToggle())
+        {
+          //  Toast.makeText(getContext(), "Automatically reconnects your nr. 1 favourite server.", Toast.LENGTH_LONG).show();
+         //   if (mServerAdapter.getItemId(0))
+         //   {
+         //       mConnectHandler.connectToServer(mServerAdapter.getItem(0));
+         //   }
+
+        }
     }
 
     @Override

@@ -40,11 +40,11 @@ public class PttKeyAccessibilityService extends AccessibilityService {
         if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
             // Keep CPU on while user holds the PTT
             if (pttWl != null && !pttWl.isHeld()) pttWl.acquire(60_000); // safety timeout 60s
-            MumlaService.instance.onTalkKeyDown();
+          //  MumlaService.instance.onTalkKeyDown();
             return true;
         }
         if (event.getAction() == KeyEvent.ACTION_UP) {
-            MumlaService.instance.onTalkKeyUp();
+       //     MumlaService.instance.onTalkKeyUp();
             if (pttWl != null && pttWl.isHeld()) pttWl.release();
             return true;
         }

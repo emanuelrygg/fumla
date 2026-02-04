@@ -13,11 +13,13 @@ import android.util.Log;
 import androidx.annotation.RequiresApi;
 import androidx.core.content.ContextCompat;
 
+import se.lublin.mumla.app.MumlaActivity;
+import se.lublin.mumla.service.AutoconnectService;
 import se.lublin.mumla.service.MumlaService;     // use your actual package
 import se.lublin.mumla.util.DatabaseStore;
 
 public class BootReceiver extends BroadcastReceiver {
-    public static final String ACTION_AUTOCONNECT = "android.intent.action.LOCKED_BOOT_COMPLETED";
+    public static final String ACTION_AUTOCONNECT = "android.intent.action.RECEIVE_BOOT_COMPLETED";
 
     // BootReceiver.java
     @Override
@@ -27,11 +29,13 @@ public class BootReceiver extends BroadcastReceiver {
         //SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(context);
        // boolean autoReconnect = sp.getBoolean("autoReconnect", false); // or your own key
        // if (!autoReconnect) return;
-        Log.d("Autoconnect", "Receives in bootreceiver");
 
-        Intent svc = new Intent(context, MumlaService.class)
-                .setAction(ACTION_AUTOCONNECT);
-        ContextCompat.startForegroundService(context, svc);
+        Log.d("Autoconnect", "Receives in bootreceiver");
+        if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
+            Intent svc = new Intent(context, AutoconnectService.class);
+            context.startService(svc);
+        }
+
 
     }
 

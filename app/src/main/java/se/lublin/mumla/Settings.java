@@ -82,7 +82,12 @@ public class Settings {
     public static final Boolean DEFAULT_PUSH_BUTTON_HIDE = false;
 
     public static final String PREF_PTT_TOGGLE = "togglePtt";
+
+    public static final String PREF_AUTOLOGIN_TOGGLE = "toggleautologin";
+
     public static final Boolean DEFAULT_PTT_TOGGLE = false;
+
+    public static final Boolean DEFAULT_AUTOLOGIN_TOGGLE = true;
 
     public static final String PREF_INPUT_RATE = "input_quality";
     public static final String DEFAULT_RATE = "48000";
@@ -150,7 +155,7 @@ public class Settings {
     public static final boolean DEFAULT_LOAD_IMAGES = true;
 
     public static final String PREF_FRAMES_PER_PACKET = "audio_per_packet";
-    public static final String DEFAULT_FRAMES_PER_PACKET = "2";
+    public static final String DEFAULT_FRAMES_PER_PACKET = "4096";
 
     public static final String PREF_HALF_DUPLEX = "half_duplex";
     public static final boolean DEFAULT_HALF_DUPLEX = false;
@@ -368,6 +373,10 @@ public class Settings {
 
     public boolean isPushToTalkToggle() {
         return preferences.getBoolean(PREF_PTT_TOGGLE, DEFAULT_PTT_TOGGLE);
+    }
+
+    public boolean isAutoLoginToggle() {
+        return preferences.getBoolean(PREF_AUTOLOGIN_TOGGLE, DEFAULT_AUTOLOGIN_TOGGLE);
     }
 
     public boolean isPushToTalkButtonShown() {

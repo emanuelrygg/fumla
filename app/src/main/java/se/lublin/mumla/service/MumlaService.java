@@ -19,6 +19,9 @@ package se.lublin.mumla.service;
 
 import static se.lublin.mumla.app.MumlaActivity.toogleformediasession;
 import static se.lublin.mumla.channel.ChannelListAdapter.channel_id;
+import static se.lublin.mumla.servers.FavouriteServerListFragment.mConnectHandler;
+import static se.lublin.mumla.servers.FavouriteServerListFragment.mServerAdapter;
+import static se.lublin.mumla.service.MediaButtonService.justtoggled;
 //import static se.lublin.mumla.service.MediaButtonService.mMediaSession;
 
 import android.app.Notification;
@@ -33,6 +36,7 @@ import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
@@ -43,6 +47,8 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
 import android.speech.tts.TextToSpeech;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.widget.Toast;
@@ -77,6 +83,7 @@ import se.lublin.mumla.Settings;
 import se.lublin.mumla.app.ServerConnectTask;
 import se.lublin.mumla.channel.MainFragment;
 import se.lublin.mumla.db.MumlaDatabase;
+import se.lublin.mumla.servers.FavouriteServerListFragment;
 import se.lublin.mumla.service.ipc.TalkBroadcastReceiver;
 import se.lublin.mumla.util.DatabaseStore;
 import se.lublin.mumla.util.HtmlUtils;
@@ -98,6 +105,10 @@ public class MumlaService extends HumlaService implements
     public static final int TTS_THRESHOLD = 250; // Maximum number of characters to read
     public static final int RECONNECT_DELAY = 10000;
 
+    private MediaSession mediaSession;
+    private static final long MEDIA_BUTTON_DEBOUNCE_MS = 150;
+    private long lastMediaButtonHandled = 0;
+
     private IHumlaService mService;
 
     private boolean Doubleclickflag = false;
@@ -110,6 +121,9 @@ public class MumlaService extends HumlaService implements
 
     private static final String NOTIF_CHANNEL_SHARED = "voice_foreground";
     private static final int NOTIFICATION_ID = 1001;
+
+    private static final String CHANNEL_ID_MEDIASESSION = "mediasession";
+    private static final int NOTIFICATION_ID_MEDIASESSION = 99;
 
     private Settings mSettings;
     private MumlaConnectionNotification mNotification;
@@ -141,16 +155,29 @@ public class MumlaService extends HumlaService implements
     };
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
-        Notification notification = createServiceNotification("Connecting...", "Mumla is starting");
+        Notification notification = new NotificationCompat
+                .Builder(this, CHANNEL_ID_MEDIASESSION)
+                .setContentTitle("Connecting...")
+                .setContentText("Mumla is starting")
+                .setSmallIcon(R.drawable.ic_stat_notify)
+                .setOngoing(true) // anbefalt for foreground
+                .build();
         startForeground(NOTIF_ID, notification);
         Log.d("Autoconnect", "OnStartCommand");
-        if (intent != null && BootReceiver.ACTION_AUTOCONNECT.equals(intent.getAction())) {
-            notification = createServiceNotification("Connecting...", "Mumla is reconnecting to previous server");
-            startForeground(NOTIF_ID, notification);
-            Log.d("Autoconnect", "Bootloader intent received");
-            autoConnectFromPrefs();
-            return START_STICKY;
-        }
+
+
+//        ServerStore ser = new ServerStore(this);
+ //       List<Server> servere = ser.getServers();
+        //            autoConnectFromPrefs(); //Tester det direkte
+
+
+//        if (intent != null && BootReceiver.ACTION_AUTOCONNECT.equals(intent.getAction())) {
+//            notification = createServiceNotification("Connecting...", "Mumla is reconnecting to previous server");
+//            startForeground(NOTIF_ID, notification);
+//            Log.d("Autoconnect", "Bootloader intent received");
+//            autoConnectFromPrefs();
+//            return START_STICKY;
+//        }
         return super.onStartCommand(intent, flags, startId);
     }
 
@@ -171,14 +198,13 @@ public class MumlaService extends HumlaService implements
         final Context c = getApplicationContext();
         MumlaDatabase db = new DatabaseStore(c);
         Log.d("Autoconnect", "Trying to autoconnect from prefs");
-
-//        Server ser = new ServerStore(c).getSelectedServer();
-//        if (db == null || ser == null) {
-//            stopSelf(); return;
-//        }
+        Server ser = new ServerStore(c).getSelectedServer();
+        if (db == null || ser == null) {
+            stopSelf(); return;
+        }
         try {
             ServerConnectTask connectTask = new ServerConnectTask(this, db);
- //           connectTask.execute(ser);
+            connectTask.execute(ser);
             Log.d("Autoconnect", "Tried to connect server");
 
         } catch (Throwable t) {
@@ -189,7 +215,7 @@ public class MumlaService extends HumlaService implements
         int channelId = prefs.getInt("PREF_CHANNEL_ID", -1);  // -1 is default if not set
         if (channelId!=-1)
         {
-//            mService.HumlaSession().joinChannel(channelId);
+            mService.HumlaSession().joinChannel(channelId);
             Log.d("Autoconnect", "Tried to join channel");
         }
     }
@@ -394,6 +420,16 @@ public class MumlaService extends HumlaService implements
         super.onCreate();
         instance = this;
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID_MEDIASESSION,
+                    "Media session input",
+                    NotificationManager.IMPORTANCE_LOW // eller passende nivå
+            );
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            nm.createNotificationChannel(channel);
+        }
+
         registerObserver(mObserver);
 
         // Register for preference changes
@@ -441,6 +477,84 @@ public class MumlaService extends HumlaService implements
             mTTS = new TextToSpeech(this, mTTSInitListener);
 
         mTalkReceiver = new TalkBroadcastReceiver(this);
+
+        mediaSession = new MediaSession(this, "Mumla");
+        mediaSession.setFlags(
+                MediaSession.FLAG_HANDLES_MEDIA_BUTTONS |
+                        MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+        );
+
+        mediaSession.setCallback(new MediaSession.Callback() {
+
+            @Override
+            public boolean onMediaButtonEvent(@NonNull Intent mediaButtonIntent) {
+                KeyEvent event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                if (event == null) return false;
+
+                if (!justtoggled && (event.getAction() == KeyEvent.ACTION_DOWN)) {
+                    // Ikke gjør noe på første ACTION_DOWN
+                    return false;
+                }
+                else if (justtoggled && (event.getAction() == KeyEvent.ACTION_UP)) {
+                    // Ikke gjør noe på andre ACTION_UP
+                    return false;
+                }
+
+                long now = System.currentTimeMillis();
+                if (now - lastMediaButtonHandled < MEDIA_BUTTON_DEBOUNCE_MS) {
+                    // Debounce – USB-C som sender to events på rad
+                    return true;
+                }
+                lastMediaButtonHandled = now;
+
+                int code = event.getKeyCode();
+                if (code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+
+                    if (event.getAction() == KeyEvent.ACTION_UP || event.getAction() == KeyEvent.ACTION_DOWN)
+                    {
+                        if (!justtoggled)
+                        {
+
+                            setTalking(true);
+                            Log.i("Key", "Talking state set true");
+                            justtoggled=true;
+                        }
+                        else
+                        {
+                            setTalking(false);
+                            Log.i("Key", "Talking state set false");
+                            justtoggled=false;
+                        }
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public void onPlay() {
+                // (valgfritt) kunne også kalle toggleTalking() her hvis du vil støtte play som PTT
+            }
+
+            @Override
+            public void onPause() {
+                // (valgfritt) stop talking
+            }
+        });
+
+        // Sett en enkel playback state så systemet vet vi kan ta play/pause
+        PlaybackState state = new PlaybackState.Builder()
+                .setActions(
+                        PlaybackState.ACTION_PLAY
+                                | PlaybackState.ACTION_PAUSE
+                                | PlaybackState.ACTION_PLAY_PAUSE
+                )
+                .setState(PlaybackState.STATE_PAUSED, 0, 0f)
+                .build();
+        mediaSession.setPlaybackState(state);
+
+        // Du kan sette active() når du er klar til å ta PTT:
+        mediaSession.setActive(true);
     }
 
     @Override
@@ -450,6 +564,30 @@ public class MumlaService extends HumlaService implements
 
 
 
+    private static final long PTT_START_DELAY_MS = 300; // 30–70ms er vanlig
+
+    private Handler handler = new Handler(Looper.getMainLooper());
+    private boolean pendingTalking = false;
+
+    private void setTalking(boolean talking) {
+      //  if (talking == isTalking()) return;  // idempotent
+       // setTalkingState(talking);
+
+        if (!talking) {
+            // Stopp sending umiddelbart
+            pendingTalking = false;
+            setTalkingState(false);
+            return;
+        }
+
+        // Start snakk med delay
+        pendingTalking = true;
+        handler.postDelayed(() -> {
+            if (pendingTalking && talking) {
+                setTalkingState(true);   // start faktisk PCM → Opus → server
+            }
+        }, PTT_START_DELAY_MS);
+    }
 
 
     @Override
@@ -736,6 +874,7 @@ public class MumlaService extends HumlaService implements
 
     @Override
     public void onTalkKeyDown() {
+        Log.i("Key", "Talk key down");
         if (isConnectionEstablished()
                 && Settings.ARRAY_INPUT_METHOD_PTT.equals(mSettings.getInputMethod())) {
             if (Doubleclickflag)

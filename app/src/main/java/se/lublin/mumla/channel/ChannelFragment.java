@@ -252,6 +252,7 @@ public class ChannelFragment extends HumlaServiceFragment implements SharedPrefe
             // XXX: This ensures that push to talk is disabled when we pause.
             // We don't want to leave the talk state active if the fragment is paused while pressed.
             getService().HumlaSession().setTalkingState(false);
+            Log.i("Key", "Humlasession set talk state");
         }
     }
 

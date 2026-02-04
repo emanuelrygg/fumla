@@ -91,7 +91,7 @@ public class MumlaOverlay {
     private boolean mShown = false;
 //    private boolean mShowChat = false;
 
-    private MumlaService mService;
+    public static MumlaService mService;
 
     public MumlaOverlay(MumlaService service) {
         mService = service;
