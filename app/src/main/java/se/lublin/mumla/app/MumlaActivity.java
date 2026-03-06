@@ -28,6 +28,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.media.AudioManager;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -128,6 +130,9 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     private DrawerLayout mDrawerLayout;
     private DrawerAdapter mDrawerAdapter;
 
+    private MediaSession mediaSession;
+
+    private boolean justtoggled = false;
     private static final int PERMISSIONS_REQUEST_RECORD_AUDIO = 1;
     private static final int PERMISSIONS_REQUEST_POST_NOTIFICATIONS = 2;
     private Server mServerPendingPerm = null;
@@ -387,6 +392,49 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
                 new StartupAction().execute(this);
             }
         }
+
+        mediaSession = new MediaSession(this, "Mumla");
+        mediaSession.setFlags(
+                MediaSession.FLAG_HANDLES_MEDIA_BUTTONS |
+                        MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+        );
+
+        mediaSession.setCallback(new MediaSession.Callback() {
+
+            @Override
+            public boolean onMediaButtonEvent(@NonNull Intent mediaButtonIntent) {
+
+                KeyEvent e = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                Log.i("Key", "Media button event triggered: " +e);
+
+                if (e == null) return true;
+
+                if (e.getKeyCode() != KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) return false;
+                //There is always two events per physical press, which require us to drop one.
+                if (e.getAction() == KeyEvent.ACTION_UP) {
+                    if (!justtoggled)
+                    {
+                        mService.onTalkKeyDown();
+                        justtoggled=true;
+                    }
+                    else {
+                        mService.onTalkKeyUp();
+                        justtoggled=false;
+                    }
+                }
+                return true; // always consume
+            }
+        });
+
+        PlaybackState state = new PlaybackState.Builder()
+                .setActions(
+                        PlaybackState.ACTION_PLAY_PAUSE
+                )
+                .setState(PlaybackState.STATE_PLAYING, 0, 1f)
+                .build();
+        mediaSession.setPlaybackState(state);
+
+        mediaSession.setActive(true);
     }
 
     @Override
