@@ -17,18 +17,12 @@
 
 package se.lublin.mumla.service;
 
-import static se.lublin.mumla.Settings.PREF_PUSH_KEY;
-
+import static se.lublin.mumla.app.MumlaActivity.firstclick;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.preference.PreferenceCategory;
-import android.preference.PreferenceManager;
-import android.preference.PreferenceScreen;
 import android.util.Log;
 import android.view.KeyEvent;
-import se.lublin.mumla.service.MumlaService;
 
 public class HardwareButtonReceiver extends BroadcastReceiver {
 
@@ -52,6 +46,20 @@ public class HardwareButtonReceiver extends BroadcastReceiver {
                 } else if ("com.sonim.intent.action.PTT_KEY_UP".equals(action)) {
                     MumlaService.instance.onTalkKeyUp();
                 }
+                //Nokia XR21
+                else if ("android.intent.action.PTT.down".equals(action)) {
+                    MumlaService.instance.onTalkKeyDown();
+                } else if ("android.intent.action.PTT.up".equals(action)) {
+                    MumlaService.instance.onTalkKeyUp();
+                }
+                //Sonim X400
+                else if (firstclick && "com.mcx.intent.action.CRITICAL_COMMUNICATION_CONTROL_KEY".equals(action)) {
+                    MumlaService.instance.onTalkKeyDown();
+                    firstclick=false;
+                } else if (!firstclick && "com.mcx.intent.action.CRITICAL_COMMUNICATION_CONTROL_KEY".equals(action)) {
+                    MumlaService.instance.onTalkKeyUp();
+                    firstclick=true;
+                }
             }
             catch (NullPointerException e)
             {
@@ -60,6 +68,4 @@ public class HardwareButtonReceiver extends BroadcastReceiver {
    //     }
 
     }
-
-
 }

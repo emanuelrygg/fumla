@@ -16,6 +16,8 @@ public class PttKeyAccessibilityService extends AccessibilityService {
 
     // XR21-observasjoner fra din logcat
     private static final int PTT_KEYCODE = 400;
+
+
     private static final int PTT_SCANCODE = 752;
 
     private PowerManager.WakeLock pttWl;
@@ -32,20 +34,22 @@ public class PttKeyAccessibilityService extends AccessibilityService {
         pttWl.setReferenceCounted(false);
     }
 
+    private static final int PTT_KEYCODE_CROSSCALL = 417;
+
+    private static final int PTT_KEYCODE_RUGGEAR = 1078;
+
     @Override
     public boolean onKeyEvent(KeyEvent event) {
-        final boolean isPtt = (event.getKeyCode() == 400) || (event.getScanCode() == 752);
+        Log.i("Accessability", "Received event: " + event);
+        final boolean isPtt = (event.getKeyCode() == PTT_KEYCODE_CROSSCALL) || (event.getKeyCode() == PTT_KEYCODE_RUGGEAR);
         if (!isPtt) return false;
 
-        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
-            // Keep CPU on while user holds the PTT
-            if (pttWl != null && !pttWl.isHeld()) pttWl.acquire(60_000); // safety timeout 60s
-          //  MumlaService.instance.onTalkKeyDown();
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            MumlaService.instance.onTalkKeyDown();
             return true;
         }
         if (event.getAction() == KeyEvent.ACTION_UP) {
-       //     MumlaService.instance.onTalkKeyUp();
-            if (pttWl != null && pttWl.isHeld()) pttWl.release();
+            MumlaService.instance.onTalkKeyUp();
             return true;
         }
         return false;

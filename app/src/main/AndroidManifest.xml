@@ -13,18 +13,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
-
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
@@ -58,17 +57,13 @@
                 <action android:name="android.intent.action.MEDIA" />
                 <action android:name="com.sonim.intent.action.PTT_KEY_DOWN" />
                 <action android:name="com.sonim.intent.action.PTT_KEY_UP" />
-                <action android:name="com.sonim.intent.action.SOS_KEY_DOWN" />
-                <action android:name="com.sonim.intent.action.SOS_KEY_UP" />
+                <action android:name="android.intent.action.PTT.down"/>
+                <action android:name="android.intent.action.PTT.up"/>
+                <action android:name="com.mcx.intent.action.CRITICAL_COMMUNICATION_CONTROL_KEY"/>
             </intent-filter>
         </receiver>
 
-        <service
-            android:name=".service.MediaButtonService"
-            android:exported="false"
-            android:foregroundServiceType="microphone|mediaPlayback"
-            android:stopWithTask="false"
-            tools:ignore="ForegroundServicePermission" />
+
 
         <receiver
             android:name=".BootReceiver"
@@ -90,7 +85,7 @@
             <meta-data
             android:name="android.accessibilityservice"
             android:resource="@xml/ptt_accessibility_service" />
-        |</service>
+        </service>
 
         <activity
             android:name=".preference.Preferences"
@@ -127,6 +122,7 @@
             android:name=".service.MumlaService"
             android:enabled="true"
             android:exported="true"
+            android:permission="android.permission.FOREGROUND_SERVICE_MICROPHONE"
             android:foregroundServiceType="microphone|dataSync"
             android:stopWithTask="false" />
 
@@ -140,7 +136,7 @@
             android:label="@string/app_name"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
-            android:launchMode="singleTop">
+            android:launchMode="singleTask">
 
             <!-- Launcher -->
             <intent-filter>

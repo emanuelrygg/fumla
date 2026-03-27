@@ -17,13 +17,16 @@
 
 package se.lublin.mumla.service;
 
+import static android.media.AudioManager.MODE_IN_COMMUNICATION;
+import static android.media.AudioManager.MODE_NORMAL;
 import static se.lublin.mumla.app.MumlaActivity.toogleformediasession;
 import static se.lublin.mumla.channel.ChannelListAdapter.channel_id;
 import static se.lublin.mumla.servers.FavouriteServerListFragment.mConnectHandler;
 import static se.lublin.mumla.servers.FavouriteServerListFragment.mServerAdapter;
-import static se.lublin.mumla.service.MediaButtonService.justtoggled;
+//import static se.lublin.mumla.service.MediaButtonService.justtoggled;
 //import static se.lublin.mumla.service.MediaButtonService.mMediaSession;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -33,6 +36,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.media.session.MediaSession;
@@ -75,6 +79,7 @@ import se.lublin.humla.model.IUser;
 import se.lublin.humla.model.Message;
 import se.lublin.humla.model.Server;
 import se.lublin.humla.model.TalkState;
+import se.lublin.humla.protocol.AudioHandler;
 import se.lublin.humla.util.HumlaException;
 import se.lublin.humla.util.HumlaObserver;
 import se.lublin.mumla.BootReceiver;
@@ -100,6 +105,8 @@ public class MumlaService extends HumlaService implements
         MumlaReconnectNotification.OnActionListener, IMumlaService {
     private static final String TAG = MumlaService.class.getName();
 
+    private boolean justtoggled = false;
+
     /** Undocumented constant that permits a proximity-sensing wake lock. */
     public static final int PROXIMITY_SCREEN_OFF_WAKE_LOCK = 32;
     public static final int TTS_THRESHOLD = 250; // Maximum number of characters to read
@@ -116,11 +123,13 @@ public class MumlaService extends HumlaService implements
 
     public static MumlaDatabase staticDatabase;
 
+    private boolean mOverlayWanted = false;
+
     public static final int NOTIF_ID = 42;
 //    private static final String NOTIF_CHANNEL = "voice_foreground";
 
     private static final String NOTIF_CHANNEL_SHARED = "voice_foreground";
-    private static final int NOTIFICATION_ID = 1001;
+    private static final int NOTIFICATION_ID = 1;
 
     private static final String CHANNEL_ID_MEDIASESSION = "mediasession";
     private static final int NOTIFICATION_ID_MEDIASESSION = 99;
@@ -130,6 +139,9 @@ public class MumlaService extends HumlaService implements
     private MumlaMessageNotification mMessageNotification;
     private MumlaReconnectNotification mReconnectNotification;
     /** Channel view overlay. */
+
+    private static final String PREFS_NAME = "mumla_channel_prefs";
+    private static final String PREF_CHANNEL_ID = "PREF_CHANNEL_ID";
     private MumlaOverlay mChannelOverlay;
     /** Proximity lock for handset mode. */
     private PowerManager.WakeLock mProximityLock;
@@ -155,6 +167,7 @@ public class MumlaService extends HumlaService implements
     };
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+
         Notification notification = new NotificationCompat
                 .Builder(this, CHANNEL_ID_MEDIASESSION)
                 .setContentTitle("Connecting...")
@@ -162,8 +175,10 @@ public class MumlaService extends HumlaService implements
                 .setSmallIcon(R.drawable.ic_stat_notify)
                 .setOngoing(true) // anbefalt for foreground
                 .build();
-        startForeground(NOTIF_ID, notification);
-        Log.d("Autoconnect", "OnStartCommand");
+        startForeground(NOTIFICATION_ID, notification);
+      //  Log.d("Autoconnect", "OnStartCommand");
+
+
 
 
 //        ServerStore ser = new ServerStore(this);
@@ -211,11 +226,12 @@ public class MumlaService extends HumlaService implements
             Log.d("Autoconnect", "Exception during autoconnect from prefs");
 //            updateNotification("Reconnect failed: " + t.getMessage());
         }
-        SharedPreferences prefs = getApplicationContext().getSharedPreferences("mumla_channel_prefs", Context.MODE_PRIVATE);
+        SharedPreferences prefs = getApplicationContext().getSharedPreferences("mumla_channel_prefs", Context.
+                MODE_PRIVATE);
         int channelId = prefs.getInt("PREF_CHANNEL_ID", -1);  // -1 is default if not set
         if (channelId!=-1)
         {
-            mService.HumlaSession().joinChannel(channelId);
+            joinChannel(channelId);
             Log.d("Autoconnect", "Tried to join channel");
         }
     }
@@ -270,18 +286,53 @@ public class MumlaService extends HumlaService implements
 
         @Override
         public void onDisconnected(HumlaException e) {
-            if (mNotification != null) {
-                mNotification.hide();
-                mNotification = null;
-            }
-            if (e != null && !mSuppressNotifications) {
-                mReconnectNotification =
-                        MumlaReconnectNotification.show(MumlaService.this,
-                                e.getMessage() + (mSettings.isTorEnabled() ? " (Tor)" : ""),
-                                isReconnecting(), MumlaService.this);
+            final String tor = mSettings.isTorEnabled() ? " (Tor)" : "";
+
+            if (e != null) {
+                // Keep foreground notification alive during reconnect / temporary disconnect.
+                if (mNotification == null) {
+                    mNotification = MumlaConnectionNotification.create(
+                            MumlaService.this,
+                            getString(R.string.mumlaConnecting) + tor,
+                            getString(R.string.connecting) + tor,
+                            MumlaService.this
+                    );
+                }
+
+                String text;
+                if (isReconnecting()) {
+                    text = "Reconnecting..." + tor;
+                } else {
+                    text = "Disconnected" + tor;
+                }
+
+                mNotification.setCustomTicker(text);
+                mNotification.setCustomContentText(text);
+                mNotification.setActionsShown(false);
+                mNotification.show();
+
+                if (!mSuppressNotifications) {
+                    mReconnectNotification =
+                            MumlaReconnectNotification.show(
+                                    MumlaService.this,
+                                    e.getMessage() + tor,
+                                    isReconnecting(),
+                                    MumlaService.this
+                            );
+                }
+            } else {
+                // Graceful/manual disconnect: now it is okay to remove foreground notification.
+                if (mNotification != null) {
+                    mNotification.hide();
+                    mNotification = null;
+                }
+
+                if (mReconnectNotification != null) {
+                    mReconnectNotification.hide();
+                    mReconnectNotification = null;
+                }
             }
         }
-
         @Override
         public void onUserConnected(IUser user) {
             if (user.getTextureHash() != null &&
@@ -307,6 +358,7 @@ public class MumlaService extends HumlaService implements
 
             if (user.getSession() == selfSession) {
                 mSettings.setMutedAndDeafened(user.isSelfMuted(), user.isSelfDeafened()); // Update settings mute/deafen state
+                saveCurrentChannelId();
                 if (mNotification != null) {
                     String contentText;
                     if (user.isSelfMuted() && user.isSelfDeafened())
@@ -325,6 +377,7 @@ public class MumlaService extends HumlaService implements
                 requestAvatar(user.getSession());
             }
         }
+
 
         @Override
         public void onMessageLogged(IMessage message) {
@@ -409,6 +462,7 @@ public class MumlaService extends HumlaService implements
                     mPTTSoundEnabled) {
                 AudioManager audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
                 audioManager.playSoundEffect(AudioManager.FX_KEYPRESS_STANDARD, -1);
+                audioManager.setSpeakerphoneOn(true);
             }
         }
     };
@@ -444,7 +498,7 @@ public class MumlaService extends HumlaService implements
         // Instantiate overlay view
         mChannelOverlay = new MumlaOverlay(this);
         mHotCorner = new MumlaHotCorner(this, mSettings.getHotCornerGravity(), mHotCornerListener);
-
+        Log.i("Mediasession", "Mediasession established");
         // Set up TTS
         if(mSettings.isTextToSpeechEnabled())
             mTTS = new TextToSpeech(this, mTTSInitListener);
@@ -488,73 +542,53 @@ public class MumlaService extends HumlaService implements
 
             @Override
             public boolean onMediaButtonEvent(@NonNull Intent mediaButtonIntent) {
-                KeyEvent event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
-                if (event == null) return false;
 
-                if (!justtoggled && (event.getAction() == KeyEvent.ACTION_DOWN)) {
-                    // Ikke gjør noe på første ACTION_DOWN
-                    return false;
+                KeyEvent e = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                Log.i("Key", "Media button event triggered: " +e);
+
+                if (e == null) return true;
+
+                if (e.getKeyCode() != KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) return false;
+
+                if (e.getAction() == KeyEvent.ACTION_UP) {
+                    boolean newTalking = !justtoggled;
+                    justtoggled = newTalking;
+                    setTalking(newTalking);
                 }
-                else if (justtoggled && (event.getAction() == KeyEvent.ACTION_UP)) {
-                    // Ikke gjør noe på andre ACTION_UP
-                    return false;
-                }
-
-                long now = System.currentTimeMillis();
-                if (now - lastMediaButtonHandled < MEDIA_BUTTON_DEBOUNCE_MS) {
-                    // Debounce – USB-C som sender to events på rad
-                    return true;
-                }
-                lastMediaButtonHandled = now;
-
-                int code = event.getKeyCode();
-                if (code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
-
-                    if (event.getAction() == KeyEvent.ACTION_UP || event.getAction() == KeyEvent.ACTION_DOWN)
-                    {
-                        if (!justtoggled)
-                        {
-
-                            setTalking(true);
-                            Log.i("Key", "Talking state set true");
-                            justtoggled=true;
-                        }
-                        else
-                        {
-                            setTalking(false);
-                            Log.i("Key", "Talking state set false");
-                            justtoggled=false;
-                        }
-                    }
-                    return true;
-                }
-                return false;
+                return true; // always consume
             }
 
-            @Override
-            public void onPlay() {
-                // (valgfritt) kunne også kalle toggleTalking() her hvis du vil støtte play som PTT
-            }
-
-            @Override
-            public void onPause() {
-                // (valgfritt) stop talking
-            }
         });
 
         // Sett en enkel playback state så systemet vet vi kan ta play/pause
         PlaybackState state = new PlaybackState.Builder()
                 .setActions(
-                        PlaybackState.ACTION_PLAY
-                                | PlaybackState.ACTION_PAUSE
-                                | PlaybackState.ACTION_PLAY_PAUSE
+                        PlaybackState.ACTION_PLAY_PAUSE
                 )
-                .setState(PlaybackState.STATE_PAUSED, 0, 0f)
+                .setState(PlaybackState.STATE_PLAYING, 0, 1f)
                 .build();
         mediaSession.setPlaybackState(state);
 
         // Du kan sette active() når du er klar til å ta PTT:
         mediaSession.setActive(true);
+
+        logAudioState("after connect");
+
+
+    }
+
+    private void logAudioState(String where) {
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return;
+
+        Log.i("AUDIO", where
+                + " mode=" + am.getMode()
+                + " speaker=" + am.isSpeakerphoneOn()
+                + " sco=" + am.isBluetoothScoOn()
+                + " music=" + am.getStreamVolume(AudioManager.STREAM_MUSIC) + "/" +
+                am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                + " voice=" + am.getStreamVolume(AudioManager.STREAM_VOICE_CALL) + "/" +
+                am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL));
     }
 
     @Override
@@ -615,7 +649,33 @@ public class MumlaService extends HumlaService implements
         mMessageNotification.dismiss();
         super.onDestroy();
     }
+    private void rejoinSavedChannelAfterReconnect() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        final int savedChannelId = prefs.getInt(PREF_CHANNEL_ID, -1);
 
+        if (savedChannelId <= 0) {
+            Log.d(TAG, "No saved non-root channel to rejoin.");
+            return;
+        }
+
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            try {
+                if (isConnected() && getSessionChannel() != null) {
+                    int currentChannelId = getSessionChannel().getId();
+                    if (currentChannelId != savedChannelId) {
+                        Log.d(TAG, "Rejoining saved channel: " + savedChannelId);
+                        joinChannel(savedChannelId);
+                    } else {
+                        Log.d(TAG, "Already in saved channel: " + savedChannelId);
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to rejoin saved channel", e);
+            }
+        }, 1000);
+    }
+
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     @Override
     public void onConnectionSynchronized() {
         // TODO? We seem to be getting a RuntimeException here, from the call
@@ -639,7 +699,7 @@ public class MumlaService extends HumlaService implements
         if(mSettings.isMuted() || mSettings.isDeafened()) {
             setSelfMuteDeafState(mSettings.isMuted(), mSettings.isDeafened());
         }
-
+        rejoinSavedChannelAfterReconnect();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             registerReceiver(mTalkReceiver, new IntentFilter(TalkBroadcastReceiver.BROADCAST_TALK), RECEIVER_EXPORTED);
         } else {
@@ -652,6 +712,17 @@ public class MumlaService extends HumlaService implements
         // Configure proximity sensor
         if (mSettings.isHandsetMode()) {
             setProximitySensorOn(true);
+        }
+        if (mOverlayWanted) {
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                try {
+                    if (!mChannelOverlay.isShown()) {
+                        mChannelOverlay.show();
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to restore overlay after reconnect", e);
+                }
+            }, 300);
         }
     }
 
@@ -787,19 +858,36 @@ public class MumlaService extends HumlaService implements
         }
     }
 
+    private void saveCurrentChannelId() {
+        try {
+            IUser self = getSessionUser();
+            if (self != null && self.getChannel() != null) {
+                int channelId = self.getChannel().getId();
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                        .edit()
+                        .putInt(PREF_CHANNEL_ID, channelId)
+                        .apply();
+                Log.d(TAG, "Saved current channel id: " + channelId);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to save current channel id", e);
+        }
+    }
+
     @Override
     public void onOverlayToggled() {
-        // Ditch notification shade/panel to make overlay presence/permission request visible.
-        // But on Android 12 that's no longer allowed.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             Intent close = new Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS);
             getApplicationContext().sendBroadcast(close);
         }
 
-        if (!mChannelOverlay.isShown()) {
+        boolean newShowState = !mChannelOverlay.isShown();
+
+        if (newShowState) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 if (!android.provider.Settings.canDrawOverlays(getApplicationContext())) {
-                    Intent showSetting = new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Intent showSetting = new Intent(
+                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                             Uri.parse("package:" + getPackageName()));
                     showSetting.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(showSetting);
@@ -807,10 +895,9 @@ public class MumlaService extends HumlaService implements
                     return;
                 }
             }
-            mChannelOverlay.show();
-        } else {
-            mChannelOverlay.hide();
         }
+
+        setOverlayShown(newShowState);
     }
 
     @Override
@@ -835,10 +922,16 @@ public class MumlaService extends HumlaService implements
 
     @Override
     public void setOverlayShown(boolean showOverlay) {
-        if(!mChannelOverlay.isShown()) {
-            mChannelOverlay.show();
+        mOverlayWanted = showOverlay;
+
+        if (showOverlay) {
+            if (!mChannelOverlay.isShown()) {
+                mChannelOverlay.show();
+            }
         } else {
-            mChannelOverlay.hide();
+            if (mChannelOverlay.isShown()) {
+                mChannelOverlay.hide();
+            }
         }
     }
 

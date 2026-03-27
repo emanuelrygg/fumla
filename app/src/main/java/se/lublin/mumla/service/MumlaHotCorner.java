@@ -124,8 +124,14 @@ public class MumlaHotCorner implements View.OnTouchListener {
         return mParams.gravity;
     }
 
-    public static interface MumlaHotCornerListener {
-        public void onHotCornerDown();
-        public void onHotCornerUp();
+    public interface MumlaHotCornerListener {
+        default void onHotCornerDown()
+        {
+            MumlaService.instance.onTalkKeyDown();
+        };
+        default void  onHotCornerUp()
+        {
+            MumlaService.instance.onTalkKeyUp();
+        };
     }
 }

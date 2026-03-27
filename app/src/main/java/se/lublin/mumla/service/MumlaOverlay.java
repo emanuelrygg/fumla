@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2014 Andrew Comminos
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package se.lublin.mumla.service;
 
 import android.content.Context;
@@ -28,6 +11,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.ListView;
+import android.widget.Button;
 
 import se.lublin.humla.model.IChannel;
 import se.lublin.humla.model.IUser;
@@ -43,20 +27,36 @@ import se.lublin.mumla.channel.ChannelAdapter;
 public class MumlaOverlay {
     private static final String TAG = MumlaOverlay.class.getName();
 
-    public static final int DEFAULT_WIDTH = 200;
-    public static final int DEFAULT_HEIGHT = 240;
+    private static final int MIN_VISIBLE_ROWS_WHEN_MULTIPLE = 2;
+    private static final int MAX_VISIBLE_ROWS = 3;
 
-    private HumlaObserver mObserver = new HumlaObserver() {
+    private static final int MIN_OVERLAY_WIDTH_DP = 160;
+
+    private final HumlaObserver mObserver = new HumlaObserver() {
         @Override
         public void onUserTalkStateUpdated(IUser user) {
-            mChannelAdapter.notifyDataSetChanged();
+            if (mChannelAdapter != null) {
+                mChannelAdapter.notifyDataSetChanged();
+                updateOverlaySizeToContent();
+            }
         }
 
         @Override
         public void onUserStateUpdated(IUser user) {
-            if(user.getChannel() != null &&
-                    user.getChannel().equals(mService.getSessionChannel()))
-                mChannelAdapter.notifyDataSetChanged();
+            if (user == null) return;
+
+            try {
+                if (user.getChannel() != null &&
+                        mService.getSessionChannel() != null &&
+                        user.getChannel().equals(mService.getSessionChannel())) {
+                    if (mChannelAdapter != null) {
+                        mChannelAdapter.notifyDataSetChanged();
+                        updateOverlaySizeToContent();
+                    }
+                }
+            } catch (IllegalStateException e) {
+                Log.d(TAG, "exception in onUserStateUpdated: " + e);
+            }
         }
 
         @Override
@@ -69,115 +69,161 @@ public class MumlaOverlay {
                 return;
             }
 
-            if (user.getSession() == selfSession) {
-                // Session user has changed channels
-                mChannelAdapter.setChannel(mService.getSessionChannel());
-            } else if (newChannel.getId() == mService.getSessionChannel().getId() ||
-                    oldChannel.getId() == mService.getSessionChannel().getId()) {
-                mChannelAdapter.notifyDataSetChanged();
+            try {
+                if (user.getSession() == selfSession) {
+                    // Session user has changed channels
+                    if (mChannelAdapter != null) {
+                        mChannelAdapter.setChannel(mService.getSessionChannel());
+                        mChannelAdapter.notifyDataSetChanged();
+                        updateOverlaySizeToContent();
+                    }
+                } else if (mService.getSessionChannel() != null &&
+                        (newChannel.getId() == mService.getSessionChannel().getId()
+                                || oldChannel.getId() == mService.getSessionChannel().getId())) {
+                    if (mChannelAdapter != null) {
+                        mChannelAdapter.notifyDataSetChanged();
+                    }
+                }
+            } catch (IllegalStateException e) {
+                Log.d(TAG, "exception while updating overlay channel: " + e);
             }
         }
     };
 
-    private View mOverlayView;
-    private ListView mOverlayList;
+    private final View mOverlayView;
+    private final ListView mOverlayList;
     private ChannelAdapter mChannelAdapter;
-    private ImageView mTalkButton;
-//    private ImageView mToggleButton;
-    private ImageView mCloseButton;
-    private ImageView mDragButton;
-    private View mTitleView;
-    private WindowManager.LayoutParams mOverlayParams;
+    private Button mTalkButton;
+    private final ImageView mCloseButton;
+    private final ImageView mDragButton;
+    private final View mTitleView;
+    private final WindowManager.LayoutParams mOverlayParams;
     private boolean mShown = false;
-//    private boolean mShowChat = false;
 
     public static MumlaService mService;
 
     public MumlaOverlay(MumlaService service) {
         mService = service;
         mOverlayView = View.inflate(service, R.layout.overlay, null);
-        mTalkButton = (ImageView) mOverlayView.findViewById(R.id.overlay_talk);
-        mDragButton = (ImageView) mOverlayView.findViewById(R.id.overlay_drag);
-        mCloseButton = (ImageView) mOverlayView.findViewById(R.id.overlay_close);
-//        mToggleButton = (ImageView) mOverlayView.findViewById(R.id.overlay_mode_toggle);
+        mTalkButton = (Button) mOverlayView.findViewById(R.id.overlay_talk);
+        mTalkButton.setText("PTT");
+        mDragButton = mOverlayView.findViewById(R.id.overlay_drag);
+        mCloseButton = mOverlayView.findViewById(R.id.overlay_close);
         mTitleView = mOverlayView.findViewById(R.id.overlay_title);
-        mOverlayList = (ListView) mOverlayView.findViewById(R.id.overlay_list);
+        mOverlayList = mOverlayView.findViewById(R.id.overlay_list);
 
+        // Make sure the overlay tree is clickable.
+        mOverlayView.setClickable(true);
+        mOverlayView.setFocusable(false);
+        mOverlayList.setClickable(true);
+        mOverlayList.setLongClickable(true);
+
+        // Drag by title bar.
         mTitleView.setOnTouchListener(new View.OnTouchListener() {
-            private final WindowManager mWindowManager = (WindowManager) mService.getSystemService(Context.WINDOW_SERVICE);
-            private float mInitialX;
-            private float mInitialY;
+            private final WindowManager mWindowManager =
+                    (WindowManager) mService.getSystemService(Context.WINDOW_SERVICE);
+
+            private float mInitialTouchX;
+            private float mInitialTouchY;
+            private int mInitialParamX;
+            private int mInitialParamY;
+            private boolean mDragging;
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                if(MotionEvent.ACTION_DOWN == event.getAction()) {
-                    mInitialX = event.getRawX() - mOverlayParams.x;
-                    mInitialY = event.getRawY() - mOverlayParams.y;
-                    return true;
-                } else if(MotionEvent.ACTION_MOVE == event.getAction()) {
-                    mOverlayParams.x = (int) (event.getRawX() - mInitialX);
-                    mOverlayParams.y = (int) (event.getRawY() - mInitialY);
-                    mWindowManager.updateViewLayout(mOverlayView, mOverlayParams);
-                    return true;
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        mInitialTouchX = event.getRawX();
+                        mInitialTouchY = event.getRawY();
+                        mInitialParamX = mOverlayParams.x;
+                        mInitialParamY = mOverlayParams.y;
+                        mDragging = false;
+                        return true;
+
+                    case MotionEvent.ACTION_MOVE:
+                        int dx = (int) (event.getRawX() - mInitialTouchX);
+                        int dy = (int) (event.getRawY() - mInitialTouchY);
+
+                        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+                            mDragging = true;
+                            mOverlayParams.x = mInitialParamX + dx;
+                            mOverlayParams.y = mInitialParamY + dy;
+                            mWindowManager.updateViewLayout(mOverlayView, mOverlayParams);
+                        }
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        return true;
+
+                    default:
+                        return false;
                 }
-                return false;
             }
         });
-
+            // Resize by drag handle.
         mDragButton.setOnTouchListener(new View.OnTouchListener() {
+            private final WindowManager mWindowManager =
+                    (WindowManager) mService.getSystemService(Context.WINDOW_SERVICE);
 
-            private final WindowManager mWindowManager = (WindowManager) mService.getSystemService(Context.WINDOW_SERVICE);
             private float mInitialX;
             private float mInitialY;
-            private float mInitialWidth;
-            private float mInitialHeight;
+            private int mInitialWidth;
+            private int mInitialHeight;
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getAction()) {
+                switch (event.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
                         mInitialX = event.getRawX();
                         mInitialY = event.getRawY();
                         mInitialWidth = mOverlayView.getWidth();
                         mInitialHeight = mOverlayView.getHeight();
                         return true;
+
                     case MotionEvent.ACTION_MOVE:
-                        mOverlayParams.width = (int) (mInitialWidth + (event.getRawX() - mInitialX));
-                        mOverlayParams.height = (int) (mInitialHeight + (event.getRawY() - mInitialY));
+                        int newWidth = (int) (mInitialWidth + (event.getRawX() - mInitialX));
+                        int newHeight = (int) (mInitialHeight + (event.getRawY() - mInitialY));
+
+                        // Prevent tiny unusable overlay goblin mode.
+                        mOverlayParams.width = Math.max(dpToPx(160), newWidth);
+                        mOverlayParams.height = Math.max(dpToPx(120), newHeight);
+
                         mWindowManager.updateViewLayout(mOverlayView, mOverlayParams);
                         return true;
-                }
-                return false;
-            }
-        });
 
-        /*
-        mToggleButton.setOnClickListener(new View.OnClickListener() {
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        return true;
 
-            @Override
-            public void onClick(View v) {
-                mShowChat = !mShowChat;
-                // TODO implement chat
-                if(mShowChat) {
-
-                } else {
-
+                    default:
+                        return false;
                 }
             }
         });
-        */
 
+        // Proper PTT touch handling.
+        mTalkButton.setClickable(true);
         mTalkButton.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                if(MotionEvent.ACTION_DOWN == event.getAction()) {
-                    mService.setTalkingState(true);
-                    return true;
-                } else if(MotionEvent.ACTION_UP == event.getAction()) {
-                    mService.setTalkingState(false);
-                    return true;
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        v.setPressed(true);
+                        mTalkButton.setText("TX");
+                        mService.onTalkKeyDown();
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.setPressed(false);
+                        mTalkButton.setText("PTT");
+                        mService.onTalkKeyUp();
+                        return true;
+
+                    default:
+                        return false;
                 }
-                return false;
             }
         });
 
@@ -185,6 +231,7 @@ public class MumlaOverlay {
         boolean usingPtt = Settings.ARRAY_INPUT_METHOD_PTT.equals(settings.getInputMethod());
         setPushToTalkShown(usingPtt);
 
+        mCloseButton.setClickable(true);
         mCloseButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -192,16 +239,16 @@ public class MumlaOverlay {
             }
         });
 
-        DisplayMetrics metrics = mService.getResources().getDisplayMetrics();
-        mOverlayParams = new WindowManager.LayoutParams((int)(DEFAULT_WIDTH*metrics.density),
-                (int)(DEFAULT_HEIGHT*metrics.density),
+        mOverlayParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                         ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                         : WindowManager.LayoutParams.TYPE_SYSTEM_ALERT,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                PixelFormat.TRANSLUCENT);
+                PixelFormat.TRANSLUCENT
+        );
         mOverlayParams.gravity = Gravity.TOP | Gravity.LEFT;
         mOverlayParams.windowAnimations = android.R.style.Animation_Dialog;
     }
@@ -211,31 +258,128 @@ public class MumlaOverlay {
     }
 
     public void show() {
-        if(mShown)
-            return;
-        mShown = true;
-        mChannelAdapter = new ChannelAdapter(mService, mService.getSessionChannel());
-        mOverlayList.setAdapter(mChannelAdapter);
-        mService.registerObserver(mObserver);
-        WindowManager windowManager = (WindowManager) mService.getSystemService(Context.WINDOW_SERVICE);
-        windowManager.addView(mOverlayView, mOverlayParams);
+        if (mShown) return;
+
+        try {
+            mChannelAdapter = new ChannelAdapter(mService, mService.getSessionChannel());
+            mOverlayList.setAdapter(mChannelAdapter);
+            mChannelAdapter.notifyDataSetChanged();
+            updateOverlaySizeToContent();
+            mService.registerObserver(mObserver);
+
+            WindowManager windowManager =
+                    (WindowManager) mService.getSystemService(Context.WINDOW_SERVICE);
+            windowManager.addView(mOverlayView, mOverlayParams);
+            mShown = true;
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to show overlay", e);
+        }
+    }
+
+    private void updateOverlaySizeToContent() {
+        if (mOverlayList == null || mChannelAdapter == null) return;
+
+        int adapterCount = mChannelAdapter.getCount();
+        if (adapterCount <= 0) return;
+
+        int visibleRows;
+        if (adapterCount == 1) {
+            visibleRows = 1;
+        } else {
+            visibleRows = Math.min(MAX_VISIBLE_ROWS,
+                    Math.max(MIN_VISIBLE_ROWS_WHEN_MULTIPLE, adapterCount));
+        }
+
+        int totalRowHeight = 0;
+        int maxRowWidth = 0;
+
+        for (int i = 0; i < visibleRows; i++) {
+            View row = mChannelAdapter.getView(i, null, mOverlayList);
+
+            int widthSpec = View.MeasureSpec.makeMeasureSpec(dpToPx(320), View.MeasureSpec.AT_MOST);
+            int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+            row.measure(widthSpec, heightSpec);
+
+            totalRowHeight += row.getMeasuredHeight();
+            maxRowWidth = Math.max(maxRowWidth, row.getMeasuredWidth());
+        }
+
+        // Measure title/header area
+        mTitleView.measure(
+                View.MeasureSpec.makeMeasureSpec(dpToPx(320), View.MeasureSpec.AT_MOST),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        );
+        int titleHeight = mTitleView.getMeasuredHeight();
+        int titleWidth = mTitleView.getMeasuredWidth();
+
+        // Measure talk button if visible
+        int talkHeight = 0;
+        int talkWidth = 0;
+        if (mTalkButton.getVisibility() == View.VISIBLE) {
+            mTalkButton.measure(
+                    View.MeasureSpec.makeMeasureSpec(dpToPx(320), View.MeasureSpec.AT_MOST),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            );
+            talkHeight = mTalkButton.getMeasuredHeight();
+            talkWidth = mTalkButton.getMeasuredWidth();
+        }
+
+        int contentWidth = Math.max(titleWidth, Math.max(maxRowWidth, talkWidth));
+        contentWidth = Math.max(contentWidth, dpToPx(MIN_OVERLAY_WIDTH_DP));
+
+        int verticalPadding =
+                mOverlayView.getPaddingTop() + mOverlayView.getPaddingBottom()
+                        + mOverlayList.getPaddingTop() + mOverlayList.getPaddingBottom();
+
+        int contentHeight = titleHeight + totalRowHeight + talkHeight + verticalPadding;
+
+        // Set list height exactly to visible content
+        android.view.ViewGroup.LayoutParams listLp = mOverlayList.getLayoutParams();
+        listLp.height = totalRowHeight;
+        mOverlayList.setLayoutParams(listLp);
+
+        mOverlayParams.width = contentWidth;
+        mOverlayParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+
+        if (mShown) {
+            try {
+                WindowManager windowManager =
+                        (WindowManager) mService.getSystemService(Context.WINDOW_SERVICE);
+                windowManager.updateViewLayout(mOverlayView, mOverlayParams);
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to update overlay size", e);
+            }
+        }
     }
 
     public void hide() {
-        if(!mShown)
-            return;
+        if (!mShown) return;
+
         mShown = false;
         mService.unregisterObserver(mObserver);
         mOverlayList.setAdapter(null);
+
         try {
-            WindowManager windowManager = (WindowManager) mService.getSystemService(Context.WINDOW_SERVICE);
+            WindowManager windowManager =
+                    (WindowManager) mService.getSystemService(Context.WINDOW_SERVICE);
             windowManager.removeView(mOverlayView);
         } catch (IllegalArgumentException e) {
-            e.printStackTrace();
+            Log.e(TAG, "Overlay already removed", e);
         }
     }
 
     public void setPushToTalkShown(boolean showPtt) {
         mTalkButton.setVisibility(showPtt ? View.VISIBLE : View.GONE);
+        mOverlayView.post(new Runnable() {
+            @Override
+            public void run() {
+                updateOverlaySizeToContent();
+            }
+        });
+    }
+
+    private int dpToPx(int dp) {
+        float density = mService.getResources().getDisplayMetrics().density;
+        return Math.round(dp * density);
     }
 }

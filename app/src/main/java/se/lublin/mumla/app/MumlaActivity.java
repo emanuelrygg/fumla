@@ -22,6 +22,7 @@ import static se.lublin.mumla.servers.FavouriteServerListFragment.mServerAdapter
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.KeyguardManager;
 import android.app.ProgressDialog;
 import android.content.ComponentName;
 import android.content.DialogInterface;
@@ -134,6 +135,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
 
     private ActionBarDrawerToggle mDrawerToggle;
     private DrawerLayout mDrawerLayout;
+    public static Boolean firstclick = true;
     private ListView mDrawerList;
     private DrawerAdapter mDrawerAdapter;
 
@@ -151,32 +153,45 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     /** List of fragments to be notified about service state changes. */
     private List<HumlaServiceFragment> mServiceFragments = new ArrayList<HumlaServiceFragment>();
 
-    private static final int PTT_KEYCODE  = 400; // from your logs
+    private static final int PTT_KEYCODE_CROSSCALL  = 417; // Required for Crosscall
+
+    private static final int PTT_KEYCODE_RUGGEAR  = 1078; // Required for Ruggear
+
     private static final int PTT_SCANCODE = 752; // from your logs
 
 
-/*
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
         Log.i("Key", "Key event dispatched");
+/*
         if (e.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
             Log.i("Key", "Key code media play pause");
-            MediaButtonService.keyaction(e); //Consumes the events and avoid Gemini
+            if (e.getAction() == KeyEvent.ACTION_DOWN)
+            {
+                MumlaService.instance.onTalkKeyDown();
+
+            }
+            else {
+                MumlaService.instance.onTalkKeyUp();
+            }
+//            MediaButtonService.keyaction(e); //Consumes the events when activity in foreground and avoid Gemini
             return true;
         }
-        else if ((e.getKeyCode() == PTT_KEYCODE) || (e.getScanCode() == PTT_SCANCODE)) {
-            Log.i("Key", "Key code ptt or scancode");
+        else
+ */
+        if ((e.getKeyCode() == PTT_KEYCODE_CROSSCALL) || (e.getScanCode() == PTT_KEYCODE_RUGGEAR)) {
+
+            Log.i("Key", "Key code ptt Crosscall or Ruggear");
             if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
-      //          MumlaService.instance.onTalkKeyDown();
+                MumlaService.instance.onTalkKeyDown();
             } else if (e.getAction() == KeyEvent.ACTION_UP) {
-         //       MumlaService.instance.onTalkKeyUp();
+                MumlaService.instance.onTalkKeyUp();
             }
             return true;
         }
         return super.dispatchKeyEvent(e);
     }
-*/
-
 
     private ServiceConnection mConnection = new ServiceConnection() {
         @Override
@@ -184,17 +199,33 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
             mService = ((MumlaService.MumlaBinder) service).getService();
             mService.setSuppressNotifications(true);
             mService.registerObserver(mObserver);
-            mService.clearChatNotifications(); // Clear chat notifications on resume.
+            mService.clearChatNotifications();
             mDrawerAdapter.notifyDataSetChanged();
 
-            for(HumlaServiceFragment fragment : mServiceFragments)
+            for (HumlaServiceFragment fragment : mServiceFragments) {
                 fragment.setServiceBound(true);
-
-            // Re-show server list if we're showing a fragment that depends on the service.
-            if(getSupportFragmentManager().findFragmentById(R.id.content_frame) instanceof HumlaServiceFragment &&
-                    !mService.isConnected()) {
-                loadDrawerFragment(DrawerAdapter.ITEM_FAVOURITES);
             }
+
+            Fragment current = getSupportFragmentManager().findFragmentById(R.id.content_frame);
+
+            if (mService.isConnected()) {
+                // Activity came back while service was already connected.
+                // Force the UI back onto the live connected fragment.
+                if (!(current instanceof ChannelFragment)) {
+                    if (mSettings.shouldStartUpInPinnedMode()) {
+                        loadDrawerFragment(DrawerAdapter.ITEM_PINNED_CHANNELS);
+                    } else {
+                        loadDrawerFragment(DrawerAdapter.ITEM_SERVER);
+                    }
+                }
+            } else {
+                // If we're showing a service-dependent fragment while not connected,
+                // fall back to favourites.
+                if (current instanceof HumlaServiceFragment) {
+                    loadDrawerFragment(DrawerAdapter.ITEM_FAVOURITES);
+                }
+            }
+
             updateConnectionState(getService());
         }
 
@@ -303,7 +334,48 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
     };
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+         logIntent(intent);
+        ensureFocusForKeys();
+    }
+
+    private void ensureFocusForKeys() {
+        // Make sure we can take focus
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+        View root = getWindow().getDecorView();
+        root.setFocusableInTouchMode(true);
+        root.requestFocus();
+    }
+
+    private void logIntent(Intent i) {
+        if (i == null) return;
+        Log.d("PTT", "intent action=" + i.getAction());
+        if (i.getExtras() != null) Log.d("PTT", "extras=" + i.getExtras());
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
+
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true);
+            setTurnScreenOn(true);
+        }
+
+
+        KeyguardManager km = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+        if (km != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                km.requestDismissKeyguard(this, null); // optional; OEM may ignore
+            }
+        }
+
+        // Force focus
+        View root = getWindow().getDecorView();
+        root.setFocusableInTouchMode(true);
+        root.requestFocus();
         mSettings = Settings.getInstance(this);
         setTheme(mSettings.getTheme());
 
@@ -395,12 +467,15 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
        setVolumeControlStream(mSettings.isHandsetMode() ?
                 AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC);
 
+/*
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Intent Mediabuttonservice = new Intent(this, MediaButtonService.class);
             startService(Mediabuttonservice);
 
         }
 
+
+ */
         if (mSettings.isFirstRun()) {
             showFirstRunGuide();
         }
@@ -414,7 +489,7 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
         mDrawerToggle.syncState();
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.S)
+    @RequiresApi(api = Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Override
     protected void onResume() {
         super.onResume();
@@ -430,10 +505,11 @@ public class MumlaActivity extends AppCompatActivity implements ListView.OnItemC
             c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
         }
 
+
 //        mConnectHandler.connectToServer(mServerAdapter.getItem(0));
-        Intent i = new Intent(this, MumlaService.class);
+ //       Intent i = new Intent(this, MumlaService.class);
 //        i.setAction(MumlaService.ACTION_CONNECT);
-        startForegroundService(i); // NÅ er bruker i foreground → LOVLIG
+ //       startForegroundService(i); // NÅ er bruker i foreground → LOVLIG
 
 
     }

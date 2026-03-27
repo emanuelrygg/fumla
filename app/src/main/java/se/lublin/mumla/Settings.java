@@ -155,7 +155,7 @@ public class Settings {
     public static final boolean DEFAULT_LOAD_IMAGES = true;
 
     public static final String PREF_FRAMES_PER_PACKET = "audio_per_packet";
-    public static final String DEFAULT_FRAMES_PER_PACKET = "4096";
+    public static final String DEFAULT_FRAMES_PER_PACKET = "2";
 
     public static final String PREF_HALF_DUPLEX = "half_duplex";
     public static final boolean DEFAULT_HALF_DUPLEX = false;
@@ -240,7 +240,7 @@ public class Settings {
     }
 
     public String getInputMethod() {
-        String method = preferences.getString(PREF_INPUT_METHOD, ARRAY_INPUT_METHOD_VOICE);
+        String method = preferences.getString(PREF_INPUT_METHOD, ARRAY_INPUT_METHOD_PTT);
         if(!ARRAY_INPUT_METHODS.contains(method)) {
             // Set default method for users who used to use handset mode before removal.
             method = ARRAY_INPUT_METHOD_PTT;

@@ -42,7 +42,7 @@ public class AutoconnectService extends Service {
 
     // Må være unik per app. Tilpass etter behov.
     private static final String CHANNEL_ID_AUTOCONNECT = "mumla_autoconnect";
-    private static final int NOTIFICATION_ID_AUTOCONNECT = 1001;
+    private static final int NOTIFICATION_ID_AUTOCONNECT = 1;
 
     // Preferences-nøkler – tilpass til dine faktiske nøkler.
     private static final String PREF_KEY_LAST_SERVER_ID = "last_server_id";
@@ -73,7 +73,7 @@ public class AutoconnectService extends Service {
             }
         }).start();
 
-        return START_NOT_STICKY;
+        return START_REDELIVER_INTENT;
     }
 
     private void handleAutoconnectNotification(Context context) {

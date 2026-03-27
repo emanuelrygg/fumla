@@ -44,7 +44,7 @@ import se.lublin.mumla.app.MumlaActivity;
  * Created by andrew on 08/08/14.
  */
 public class MumlaConnectionNotification {
-    private static final int NOTIFICATION_ID = 1;
+    private static final int NOTIFICATION_ID = 2;
     private static final String BROADCAST_MUTE = "b_mute";
     private static final String BROADCAST_DEAFEN = "b_deafen";
     private static final String BROADCAST_OVERLAY = "b_overlay";
@@ -123,19 +123,6 @@ public class MumlaConnectionNotification {
     }
 
     /**
-     * Hides the notification and unregisters the action receiver.
-     */
-    public void hide() {
-        try {
-            mService.unregisterReceiver(mNotificationReceiver);
-        } catch (IllegalArgumentException e) {
-            // Thrown if receiver is not registered.
-            e.printStackTrace();
-        }
-        mService.stopForeground(true);
-    }
-
-    /**
      * Called to update/create the service's foreground Mumla notification.
      */
     private Notification createNotification() {
@@ -196,6 +183,19 @@ public class MumlaConnectionNotification {
             mService.startForeground(NOTIFICATION_ID, notification);
         }
         return notification;
+    }
+
+    /**
+     * Hides the notification and unregisters the action receiver.
+     */
+    public void hide() {
+        try {
+            mService.unregisterReceiver(mNotificationReceiver);
+        } catch (IllegalArgumentException e) {
+            // Thrown if receiver is not registered.
+            e.printStackTrace();
+        }
+        mService.stopForeground(true);
     }
 
     public interface OnActionListener {

@@ -61,10 +61,11 @@ public class ServerConnectTask extends AsyncTask<Server, Void, Intent> {
         int inputMethod = mSettings.getHumlaInputMethod();
 
         int audioSource = mSettings.isHandsetMode() ?
-                MediaRecorder.AudioSource.DEFAULT : MediaRecorder.AudioSource.VOICE_COMMUNICATION;
+                MediaRecorder.AudioSource.VOICE_CALL : MediaRecorder.AudioSource.VOICE_COMMUNICATION;
+
         int audioStream = mSettings.isHandsetMode() ?
                 AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC;
-
+     //   int audioStream = AudioManager.STREAM_VOICE_CALL;
         String applicationVersion = "";
         try {
             applicationVersion = mContext.getPackageManager().getPackageInfo(mContext.getPackageName(), 0).versionName;
